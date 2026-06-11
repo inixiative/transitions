@@ -77,6 +77,16 @@ describe('applyMerge', () => {
     applyMerge({ kind: 'append', path: 'tags' }, record, { tags: ['b'] });
     expect(record.tags).toEqual(['a']);
   });
+
+  test('deepMerge does not alias the caller changes into the result', () => {
+    const changes = { meta: { z: 3 }, tags: ['z'] };
+    const out = applyMerge('deepMerge', record, changes);
+    // result must not share references with `changes` — mutating the output is a footgun otherwise
+    expect(out.meta).not.toBe(changes.meta);
+    expect(out.tags).not.toBe(changes.tags);
+    (out.tags as string[]).push('mutated');
+    expect(changes.tags).toEqual(['z']);
+  });
 });
 
 describe('serializability', () => {

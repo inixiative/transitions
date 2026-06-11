@@ -30,7 +30,10 @@ export const applyMerge = <R extends Row>(
   const strategy: MergeStrategy = merge ?? 'spread';
 
   if (strategy === 'spread') return { ...record, ...changes };
-  if (strategy === 'deepMerge') return mergeWith(cloneDeep(record), changes, replaceArrays);
+  // clone BOTH inputs: mergeWith assigns nested objects/arrays from `changes` by reference, which
+  // would alias the caller's `changes` into the returned record (a mutation footgun for a pure guard).
+  if (strategy === 'deepMerge')
+    return mergeWith(cloneDeep(record), cloneDeep(changes), replaceArrays);
 
   // field-scoped array strategies: spread the rest of `changes`, then concat at `path`.
   const { kind, path } = strategy;

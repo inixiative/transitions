@@ -9,5 +9,5 @@ export default defineConfig({
   minify: true,
   treeshake: true,
   outDir: 'dist',
-  external: ['@inixiative/json-rules'],
+  external: ['@inixiative/json-rules', 'lodash-es'],
 });

@@ -11,5 +11,10 @@ export const describe = (reason: Reason): string => {
       return reason.authz
         ? `not authorized (${reason.authz}-level permission denied)`
         : 'not authorized';
+    default: {
+      // exhaustiveness guard: a new FailureKind must be handled here, not silently return undefined
+      const _exhaustive: never = reason.kind;
+      return _exhaustive;
+    }
   }
 };
