@@ -6,7 +6,7 @@ export type Row = Record<string, unknown>;
  * The serializable permission algebra.
  *
  * Re-declared here — deliberately NOT imported from any app's permissions package — so
- * `@inixiative/transition` stays a zero-app-dependency primitive. It is structurally
+ * `@inixiative/transitions` stays a zero-app-dependency primitive. It is structurally
  * identical to the rebac `ActionRule` used by `@template/permissions`, so a permission
  * rule authored over there deserializes into a transition's `permission` field unchanged.
  *
