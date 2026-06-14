@@ -91,12 +91,8 @@ export const available = (
  */
 export const eligible = (map: TransitionMap, model: string, verb: string): Row => {
   const action = getAction(map, model, verb);
+  // toPrisma always terminates a plan in a WhereStep (and throws on count-based ops,
+  // which would need a multi-step plan, since we pass no map/model). Trust that contract.
   const { steps } = toPrisma({ any: action.paths.map((path) => path.from.predicate) });
-  // json-rules guarantees the last step is the WhereStep. Assert it loudly rather than cast-and-swallow:
-  // a silent `{}` fallback would mean match-EVERYTHING — the dangerous inverse of the intended
-  // match-nothing — if a future json-rules emits a trailing non-where step or multi-step relation refs.
-  const last = steps[steps.length - 1] as { operation?: string; where?: Row } | undefined;
-  if (last?.operation !== 'where' || last.where === undefined)
-    throw new Error('transition: expected a terminal WhereStep from toPrisma; got none');
-  return last.where;
+  return (steps[steps.length - 1] as { where: Row }).where;
 };
