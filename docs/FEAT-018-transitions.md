@@ -68,25 +68,26 @@ given transition can be persisted/tenant-configured.
 ## Kernel (pure, ORM-agnostic, ~tiny)
 
 ```ts
-check(t, record, changes, { actor, authorize }?) => {
+checkPath(t, record, changes, { actor, authorize }?) => {
   const next = applyMerge(t.to.merge, record, changes);
-  // per side: legality (json-rules → true | reason string) AND authz (injected rebac.check → boolean).
-  // from.* reads `record`; to.* reads `next`.
-  → | { ok: true }
-    | { ok: false, reason: {
-        kind: 'no-from' | 'no-to' | 'unauthorized',  // drives 409 (illegal) vs 403 (unauthorized)
-        from?: string,                // json-rules failure string when from.predicate fails
-        to?: string,                  // json-rules failure string when to.predicate fails
-        authz?: 'action' | 'from' | 'to',  // which permission level denied
-      }}
+  // per side: legality (json-rules → true | reason string) AND authz (injected → boolean), reported
+  // independently — every failure on the edge, not just the first. from.* reads `record`; to.* reads `next`.
+  → true                                                   // allowed
+    | {                                                    // PathReason
+        from?: { predicate?: string; permission?: string },  // current-record failures
+        to?:   { predicate?: string; permission?: string },  // merged-record failures
+      }
 }
+
+checkTransition(rules, model, action, record, changes, { actor, authorize }?)
+  → true | { paths: PathReason[] }   // first passing path → true; else one PathReason per path tried
 ```
 
-Return a **structured reason**, not a bare bool — `kind` lets the caller map illegal→409 vs
-unauthorized→403, and a `describe(reason)` helper assembles the combined human message
-("can't reach `connected` from `disconnected`" / "not authorized to leave `owner`"). json-rules
-already returns the per-predicate reason string; authz returns the denying level. Authz is injected
-(`authorize`) — the kernel never imports permissions.
+Return **`true` or a structured reason**, not a bare bool. The reason mirrors json-rules: a `Reason` is
+`{ paths }`, one `PathReason` per candidate path, each splitting `from`/`to` and — within a side —
+`predicate` (legality) vs `permission` (authz). The caller maps to HTTP itself (a path that fails only
+on `permission` → 403; any `predicate` failure → 409); `describe(reason)` assembles the human message.
+Authz is injected (`authorize`) — the kernel never imports permissions.
 
 ## Duality (why it earns a package)
 
@@ -105,22 +106,22 @@ action level, never inside a `Transition` (keeps the kernel atomic + serializabl
 ```
 type Action = {
   paths: Transition[];      // OR of edges; single-path action = array of one
-  permission?: ActionRule;  // @monorepo/permissions rebac rule (serializable); see Verified notes
   label?: string;           // affordance UI
 };
 Map<model, Record<actionName, Action>>
 ```
-An action is an **object**, not a bare `Transition[]`: actions are the unit of authorization
-(per-action, state-independent) and affordance (label/icon), and a bare array has nowhere to
-hang those — both are already on the roadmap, so the object isn't speculative.
-- `available(model, record, { actor, authorize })` → action names with **any** path whose
-  `from.predicate(record)` is true **and** both `action.permission` and that path's `from.permission`
-  authorize against the current record → drives action-button enablement, API affordances, "what can I do".
+An action is an **object**, not a bare `Transition[]`: it's the unit of affordance (label/icon), and a
+bare array has nowhere to hang that. Authorization is NOT here — it lives on the from/to sides, because
+every authz check must read a concrete record (current or merged); a record-free action-level permission
+can't pick one.
+- `available(rules, model, record, { actor, authorize })` → action names with **any** path whose
+  `from.predicate(record)` is true **and** that path's `from.permission` authorizes against the current
+  record → drives action-button enablement, API affordances, "what can I do".
   **`to.predicate`/`to.permission` are NOT evaluated here** — they need the merged record, which doesn't
-  exist without proposed changes. The `to` side defers to `check()`; `available()` is an affordance hint,
-  `check()` is authoritative.
-- `check(model, action, record, changes)` → **first** path whose `from` matches the current
-  record AND `to` matches the merged next-state (that path's `merge` applies).
+  exist without proposed changes. The `to` side defers to `checkTransition()`; `available()` is an
+  affordance hint, `checkTransition()` is authoritative.
+- `checkTransition(rules, model, action, record, changes)` → **first** path whose `from` matches the
+  current record AND `to` matches the merged next-state (that path's `merge` applies).
 - `eligible(model, action)` → `toPrisma(Any[...paths.map(p => p.from.predicate)])` — one OR'd
   `where` for bulk "who can take this action" (verified: `toPrisma(Any) → { OR: [...] }`).
 
@@ -166,10 +167,10 @@ must never import Prisma. Build only when the first relation-referencing transit
 ## Tasks
 
 - [x] Package skeleton `@inixiative/transitions`, depends on `@inixiative/json-rules`
-- [x] Kernel `checkTransition()` (from/to predicate eval + merge application + per-side authz) returning structured `{ ok, reason }`
+- [x] Kernel `checkPath()` (from/to predicate eval + merge application + per-side authz) returning `true | PathReason`; registry `checkTransition()` returns `true | { paths }`
 - [x] Merge: raw cb + keyword strategies (`spread`, `deepMerge`, `append`, `appendUnique`) +
       `isSerializableMerge` / `isSerializable(transition)`
-- [x] Registry: `check`, `available(model, record)`, `eligible(model, verb)` over `TransitionMap`
+- [x] Registry: `checkTransition`, `available(model, record)`, `eligible(model, action)` over `TransitionMap`
 - [x] `toPrisma` set-query helper off `from.predicate` (`eligible` = `toPrisma(Any[...froms])`)
 - [x] Authoring validator (`validateTransition`) — predicates via json-rules `validateRule` + optional
       `checkRuleAgainstLens` for the field allowlist; merge + permission shape. _(per-model allowlist is
@@ -243,27 +244,28 @@ _Source-checked 2026-06-08 against `@inixiative/json-rules@2.5.0` + `@monorepo/p
 Authz is **intrinsic** to a valid transition — one with no passing permission isn't valid; the
 effective check ANDs every permission that applies. Absent = open; use deliberately.
 
-**Permission placement — DECIDED: per-side (on `from`/`to`), drop the edge-level knob.**
+**Permission placement — DECIDED: per-side only (on `from`/`to`). No action-level, no edge-level knob.**
 
 Authz is ABAC-aware (`{ rule: Condition }` over record fields), so it carries the **same current-vs-merged
 record dependency as the predicate** — which is exactly why it belongs on the `Side`. Effective authz:
 
 ```
-effective = action.permission  AND  from.permission  AND  to.permission
-            (verb capability)       (current record)      (merged record)
-            all ANDed; absent = open (use deliberately)
+effective = from.permission  AND  to.permission
+            (current record)      (merged record)
+            ANDed; absent = open (use deliberately)
 ```
 
-- **Why not action-level only / merged-record only:** a single rule must pick one record and loses the
-  other. Authz on a **changing field's OLD value** ("only admin may move a role *away from* owner") is
-  only visible to `from.permission` — the merged record overwrote it. Not exotic; it's most
-  "who-may-leave-this-state" rules.
-- **Why this beats Option A (target-split verbs):** no verb explosion. `changeRole` stays ONE verb with
-  a path per target role, each path's `to.permission` carrying that target's authz.
+- **Why no action-level permission:** every authz check must read a concrete record. `from.permission`
+  reads the current record, `to.permission` the merged one — an action-level rule has neither, so it
+  either borrows one (at which point it's just `from.permission` renamed — redundant) or silently loses
+  the other record. Put the verb-capability rule on `from.permission` instead.
+- **Why per-side (not merged-record only):** authz on a **changing field's OLD value** ("only admin may
+  move a role *away from* owner") is only visible to `from.permission` — the merged record overwrote it.
+  Not exotic; it's most "who-may-leave-this-state" rules.
 - **Why no standalone `Transition.permission`:** per-side subsumes it — every path already owns its
-  `from`/`to` sides. Fewer knobs than A (action+path), strictly more expressive.
-- **`available()` consequence:** only `action.permission` + `from.permission` are checkable from the
-  current record; `to.permission` defers to `check()` (see Registry section). Consistent with `to.predicate`.
+  `from`/`to` sides.
+- **`available()` consequence:** only `from.permission` is checkable from the current record;
+  `to.permission` defers to `checkTransition()` (see Registry section). Consistent with `to.predicate`.
 
 Big payoff: a class of imperative validation collapses into from/to predicates.
 
@@ -272,13 +274,13 @@ owner?" and throws. As a transition on `organizationUser`:
 
 ```
 removeOwner = {
-  permission: 'manage',                              // rebac action: who may manage members
   paths: [{
     from: {
       predicate: All[
         { field: 'role', op: equals, value: 'owner' },                   // currently an owner
         <aggregate: organization.organizationUsers where role=owner → count > 1>  // another owner remains
       ],
+      permission: 'manage',                                              // rebac action: who may manage members (current record)
       requires: { organization: { organizationUsers: true } },           // load siblings for the aggregate
     },
     to: { predicate: { field: 'role', op: notEquals, value: 'owner' } }, // result: no longer owner
@@ -294,9 +296,9 @@ json-rules `AggregateRule` / `AGGREGATE_OPERATORS` — exact syntax TBD at build
 (gate, don't do):
 
 ```
-approve = { permission: 'resolve',                 paths: [{ from: { status: pending }, to: { status: approved } }] }
-reject  = { permission: 'resolve',                 paths: [{ from: { status: pending }, to: { status: rejected  } }] }
-cancel  = { permission: { self: 'sourceUserId' },  paths: [{ from: { status: pending }, to: { status: cancelled } }] }
+approve = { paths: [{ from: { status: pending, permission: 'resolve' },                to: { status: approved } }] }
+reject  = { paths: [{ from: { status: pending, permission: 'resolve' },                to: { status: rejected  } }] }
+cancel  = { paths: [{ from: { status: pending, permission: { self: 'sourceUserId' } }, to: { status: cancelled } }] }
 ```
 
 `available(inquiry)` → which of approve/reject/cancel to show (status=pending + actor); the existing
@@ -324,10 +326,11 @@ multi-step sagas — anything that must *do*, not *gate*.
 
 - **DECIDED — first-match passing.** First path whose `from` matches the current record, whose `to`
   matches the merged record, and whose permissions pass wins. If none pass, return the structured failure.
-- **DECIDED — structured failure reasons.** `check()` returns `kind: 'no-from' | 'no-to' | 'unauthorized'`
-  + per-side json-rules strings + the denying authz level, so callers map illegal→409 vs unauthorized→403;
-  a `describe(reason)` helper builds the combined human message. Subsumes the old "does `available()`
-  report near-miss reasons" question — the reason rides on `check()`.
+- **DECIDED — structured failure reasons.** `checkTransition()` returns `true` or `{ paths: PathReason[] }` —
+  one `PathReason` per candidate path, each splitting `from`/`to` and `predicate`/`permission`. Callers map
+  to HTTP (permission-only failure → 403; any predicate failure → 409); `describe(reason)` builds the human
+  message. Subsumes the old "does `available()` report near-miss reasons" question — the reason rides on
+  `checkTransition()`.
 - **CONFIRMED present in zealot (Later scope) —** `apps/api/src/middleware/resources/{scopeNarrowing,
   mergeNarrowingWheres}.ts` exist with `WhereScope` + the `Scope = (c: Context<AppEnv>) => WhereScope` cb
   form. Caveat: applied as ad-hoc middleware, **not** a first-class route field — porting needs the

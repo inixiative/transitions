@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { Operator } from '@inixiative/json-rules';
 import type { RebacSchema, Transition } from '../index';
-import { checkTransition, createRebac, makeRebacAuthorize } from '../index';
+import { checkPath, createRebac, makeRebacAuthorize } from '../index';
 
 const schema: RebacSchema = {
   organization: {
@@ -117,14 +117,14 @@ describe('rebac wired into the transition kernel', () => {
   test('authorized when the related org grants manage', () => {
     const authorize = rebac('membership');
     const record = { role: 'member', organization: { role: 'owner' } };
-    const result = checkTransition(promote, record, { role: 'admin' }, { authorize });
-    expect(result.ok).toBe(true);
+    expect(checkPath(promote, record, { role: 'admin' }, { authorize })).toBe(true);
   });
 
-  test('unauthorized(from) when the related org does not', () => {
+  test('from permission denied when the related org does not grant manage', () => {
     const authorize = rebac('membership');
     const record = { role: 'member', organization: { role: 'member' } };
-    const result = checkTransition(promote, record, { role: 'admin' }, { authorize });
-    expect(result).toMatchObject({ ok: false, reason: { kind: 'unauthorized', authz: 'from' } });
+    const result = checkPath(promote, record, { role: 'admin' }, { authorize });
+    expect(result).not.toBe(true);
+    if (result !== true) expect(result.from?.permission).toBe('not authorized');
   });
 });

@@ -3,9 +3,9 @@
 A small, **stateless** primitive on top of [`@inixiative/json-rules`](https://github.com/inixiative/json-rules)
 that answers two questions about an entity's lifecycle, declaratively:
 
-- **"Can this change happen?"** — guard a proposed update (`check`).
-- **"What changes can happen?"** — list available verbs for a record (`available`), and via
-  `toPrisma`, every record currently eligible for a verb (`eligible`).
+- **"Can this change happen?"** — guard a proposed update (`checkTransition`).
+- **"What changes can happen?"** — list available actions for a record (`available`), and via
+  `toPrisma`, every record currently eligible for an action (`eligible`).
 
 It is **not** a state machine (no statecharts/actors/hierarchy), does **not** own state, and does
 **not** execute the change or run side effects. It is a guard + affordance layer. A transition is
@@ -17,9 +17,9 @@ no deploy to change a lifecycle).
 ## Model
 
 ```
-model → verb → Action { paths: Transition[], permission?, label? }
-                         Transition { from: Side, to: Side & { merge? } }
-                         Side       { predicate, permission?, requires? }
+model → action → Action { paths: Transition[], label? }
+                          Transition { from: Side, to: Side & { merge? } }
+                          Side       { predicate, permission?, requires? }
 ```
 
 A `Transition` is one atomic `from → to` edge. An **Action** (a named verb) is the OR of its edges —
@@ -28,34 +28,51 @@ serializable.
 
 The `from`/`to` asymmetry is load-bearing and applies to **both** `predicate` (legality) and
 `permission` (authz): `from.*` is evaluated against the **current** record, `to.*` against the
-**resulting (merged)** record.
+**resulting (merged)** record. Permission only ever lives on a side — every authz check reads a
+concrete record, so there is no record-free action-level permission.
 
-## Two failure modes, one check
+## Check
 
 ```ts
 import { checkTransition } from '@inixiative/transitions';
 
-const approve = {
-  from: { predicate: { field: 'status', operator: 'equals', value: 'pending' } },
-  to: { predicate: { field: 'status', operator: 'equals', value: 'approved' } },
+const rules = {
+  inquiry: {
+    approve: {
+      paths: [
+        {
+          from: { predicate: { field: 'status', operator: 'equals', value: 'pending' } },
+          to: { predicate: { field: 'status', operator: 'equals', value: 'approved' } },
+        },
+      ],
+    },
+  },
 };
 
-checkTransition(approve, { status: 'pending' }, { status: 'approved' });
-// → { ok: true, path: approve }
+checkTransition(rules, 'inquiry', 'approve', { status: 'pending' }, { status: 'approved' });
+// → true
 
-checkTransition(approve, { status: 'approved' }, { status: 'approved' });
-// → { ok: false, reason: { kind: 'no-from', from: 'status must equal "pending"' } }
+checkTransition(rules, 'inquiry', 'approve', { status: 'approved' }, { status: 'approved' });
+// → { paths: [{ from: { predicate: 'status must equal "pending"' } }] }
 ```
 
-`check` returns a **structured reason**, never a bare bool:
+`checkTransition(rules, model, action, record, changes, { actor, authorize })` returns **`true`** when
+allowed, else a structured **`Reason`** — never a bare bool:
 
-| `reason.kind`  | meaning                                            | suggested HTTP |
-| -------------- | -------------------------------------------------- | -------------- |
-| `no-from`      | no edge starts from the current state              | 409            |
-| `no-to`        | the merged state is not a valid target             | 409            |
-| `unauthorized` | a legal edge exists but a permission denied        | 403            |
+```ts
+type SideReason = { predicate?: string; permission?: string }; // why one side failed
+type PathReason = { from?: SideReason; to?: SideReason };       // why one candidate path failed
+type Reason = { paths: PathReason[] };                          // one entry per path tried
+```
 
-`describe(reason)` builds a human-readable message; `reason.kind` drives the status code.
+Each side reports its `predicate` (legality) and `permission` (authz) failures independently, and
+`from`/`to` are kept separate — so the caller sees the whole picture, not just the first failure. To
+map to HTTP: a path that fails purely on `permission` is a 403; any `predicate` failure is a 409.
+`describe(reason)` builds a human-readable message.
+
+`checkPath(transition, record, changes, options)` is the single-edge kernel underneath, returning
+`true | PathReason`; `checkTransition` walks an action's paths with it and returns the first `true`,
+else every path's `PathReason`.
 
 ## Permissions are injected (the seam)
 
@@ -64,20 +81,20 @@ The kernel never imports an authorization library. Per-side `permission` is a se
 `authorize` callback to evaluate it:
 
 ```ts
-import { check, createRebac } from '@inixiative/transitions';
+import { checkTransition, createRebac } from '@inixiative/transitions';
 
 const authorize = createRebac({ schema: rebacSchema })('inquiry');
-check(transitions, 'inquiry', 'approve', record, changes, { actor, authorize });
+checkTransition(rules, 'inquiry', 'approve', record, changes, { actor, authorize });
 ```
 
-Effective authz ANDs three rules, each against the record it reads:
+Effective authz ANDs the two side rules, each against the record it reads:
 
 ```
-action.permission   AND   from.permission   AND   to.permission
-(verb capability)         (current record)        (merged record)
+from.permission   AND   to.permission
+(current record)        (merged record)
 ```
 
-Absent = open; `null` = terminal deny.
+Absent = open; `null` = terminal deny. Omit `authorize` to check legality only.
 
 ### `createRebac` / `makeRebacAuthorize` — reference implementation
 
@@ -92,10 +109,10 @@ the transition core changes.
 ```ts
 import { available, eligible } from '@inixiative/transitions';
 
-available(transitions, 'inquiry', record, { actor, authorize });
-// → ['approve', 'reject', 'cancel']   (from-side only — `to` needs proposed changes, so it defers to check)
+available(rules, 'inquiry', record, { actor, authorize });
+// → ['approve', 'reject', 'cancel']   (from-side only — `to` needs proposed changes, so it defers to checkTransition)
 
-eligible(transitions, 'inquiry', 'approve');
+eligible(rules, 'inquiry', 'approve');
 // → { OR: [{ status: { equals: 'pending' } }] }   (Prisma where for "every record eligible for approve")
 ```
 

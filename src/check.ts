@@ -4,13 +4,14 @@ import type {
   ActionRule,
   Actor,
   Authorize,
-  CheckOptions,
-  CheckResult,
+  AuthorizeOptions,
+  PathReason,
   Row,
+  SideReason,
   Transition,
 } from './types';
 
-const reasonString = (result: boolean | string): string =>
+const predicateReason = (result: boolean | string): string =>
   typeof result === 'string' ? result : 'predicate not satisfied';
 
 /**
@@ -30,38 +31,34 @@ const denies = (
 };
 
 /**
- * The kernel: evaluate one atomic transition.
- *
- * Legality (json-rules) AND authz (injected, per side), with the load-bearing asymmetry —
- * `from.*` reads the current `record`, `to.*` reads the merged `next` record. Authz order is
- * action baseline → from → to, all ANDed. Returns a structured {@link CheckResult} whose
- * `reason.kind` lets a caller map illegal → 409 vs unauthorized → 403.
- *
- * Omit `options.authorize` to check legality only.
+ * The kernel: evaluate one atomic edge. Reports every failure rather than short-circuiting —
+ * `from`/`to` and predicate/permission are independent slots — so a caller sees the whole
+ * picture. `from.*` reads the current `record`, `to.*` reads the merged `next` record. Returns
+ * `true` when the edge is allowed, else the {@link PathReason}. Omit `authorize` for legality only.
  */
-export const checkTransition = <R extends Row>(
+export const checkPath = <R extends Row>(
   transition: Transition<R>,
   record: R,
   changes: Partial<R> = {},
-  options: CheckOptions = {},
-): CheckResult<R> => {
-  const { actor, authorize, basePermission } = options;
+  options: AuthorizeOptions = {},
+): true | PathReason => {
+  const { actor, authorize } = options;
   const next = applyMerge(transition.to.merge, record, changes);
 
-  const fromResult = checkRule(transition.from.predicate, record as Row);
-  if (fromResult !== true)
-    return { ok: false, reason: { kind: 'no-from', from: reasonString(fromResult) } };
-
-  const toResult = checkRule(transition.to.predicate, next as Row);
-  if (toResult !== true)
-    return { ok: false, reason: { kind: 'no-to', to: reasonString(toResult) } };
-
-  if (denies(authorize, basePermission, record as Row, actor))
-    return { ok: false, reason: { kind: 'unauthorized', authz: 'action' } };
+  const from: SideReason = {};
+  const fromPredicate = checkRule(transition.from.predicate, record as Row);
+  if (fromPredicate !== true) from.predicate = predicateReason(fromPredicate);
   if (denies(authorize, transition.from.permission, record as Row, actor))
-    return { ok: false, reason: { kind: 'unauthorized', authz: 'from' } };
-  if (denies(authorize, transition.to.permission, next as Row, actor))
-    return { ok: false, reason: { kind: 'unauthorized', authz: 'to' } };
+    from.permission = 'not authorized';
 
-  return { ok: true, path: transition };
+  const to: SideReason = {};
+  const toPredicate = checkRule(transition.to.predicate, next as Row);
+  if (toPredicate !== true) to.predicate = predicateReason(toPredicate);
+  if (denies(authorize, transition.to.permission, next as Row, actor))
+    to.permission = 'not authorized';
+
+  const reason: PathReason = {};
+  if (from.predicate || from.permission) reason.from = from;
+  if (to.predicate || to.permission) reason.to = to;
+  return reason.from || reason.to ? reason : true;
 };

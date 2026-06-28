@@ -1,6 +1,6 @@
 {
   "name": "@inixiative/transitions",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Declarative, serializable transition guard + affordance layer on top of @inixiative/json-rules",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -56,7 +56,7 @@
     }
   },
   "dependencies": {
-    "@inixiative/json-rules": "^2.6.0",
+    "@inixiative/json-rules": "^2.10.0",
     "lodash-es": "^4.17.21"
   },
   "exports": {

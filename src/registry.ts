@@ -1,100 +1,81 @@
 import { check as checkRule, toPrisma } from '@inixiative/json-rules';
-import { checkTransition } from './check';
+import { checkPath } from './check';
 import type {
   Action,
+  ActionRule,
   AuthorizeOptions,
-  CheckOptions,
   CheckResult,
-  PathFailure,
-  Reason,
+  PathReason,
   Row,
   TransitionMap,
 } from './types';
 
-const getAction = (map: TransitionMap, model: string, verb: string): Action => {
-  const action = map[model]?.[verb];
-  if (!action) throw new Error(`transition: no action "${verb}" registered on model "${model}"`);
-  return action;
-};
-
-// Pick the most-progressed failure across an action's paths:
-//   unauthorized (a legal edge existed but authz denied) → 403
-//   no-to        (from matched, target invalid)          → 409
-//   no-from      (no edge even starts here)              → 409
-const aggregate = (failures: Reason[]): Reason => {
-  const paths: PathFailure[] = failures.map(({ kind: _kind, paths: _paths, ...rest }) => rest);
-  const pick = (kind: Reason['kind']) => failures.find((failure) => failure.kind === kind);
-  const chosen = pick('unauthorized') ?? pick('no-to') ?? pick('no-from');
-  if (!chosen) return { kind: 'no-from', paths };
-  const { paths: _omit, ...representative } = chosen;
-  return { ...representative, paths };
+const getAction = (rules: TransitionMap, model: string, action: string): Action => {
+  const found = rules[model]?.[action];
+  if (!found) throw new Error(`transition: no action "${action}" registered on model "${model}"`);
+  return found;
 };
 
 /**
- * Authoritative check: the FIRST path whose `from` matches the current record, whose `to`
- * matches the merged record, and whose permissions all pass, wins. If none pass, returns the
- * aggregated structured failure (see {@link aggregate}).
+ * Authoritative check: the FIRST path whose `from` matches the current record, whose `to` matches
+ * the merged record, and whose permissions all pass, wins → `true`. If none pass, returns a
+ * {@link Reason} with one {@link PathReason} per candidate path tried.
  */
-export const check = (
-  map: TransitionMap,
+export const checkTransition = (
+  rules: TransitionMap,
   model: string,
-  verb: string,
+  action: string,
   record: Row,
   changes: Row = {},
   options: AuthorizeOptions = {},
 ): CheckResult => {
-  const action = getAction(map, model, verb);
-  const opts: CheckOptions = { ...options, basePermission: action.permission };
-
-  const failures: Reason[] = [];
-  for (const path of action.paths) {
-    const result = checkTransition(path, record, changes, opts);
-    if (result.ok) return result;
-    failures.push(result.reason);
+  const found = getAction(rules, model, action);
+  const paths: PathReason[] = [];
+  for (const path of found.paths) {
+    const result = checkPath(path, record, changes, options);
+    if (result === true) return true;
+    paths.push(result);
   }
-  return { ok: false, reason: aggregate(failures) };
+  return { paths };
 };
 
 /**
- * Affordance hint: which verbs are offerable from `record` right now. Evaluates ONLY the
- * `from` side (predicate + `action`/`from` permission against the current record) — `to` needs
- * the merged record, which doesn't exist without proposed changes, so it defers to {@link check}.
+ * Affordance hint: which actions are offerable from `record` right now. Evaluates ONLY the `from`
+ * side (predicate + `from` permission against the current record) — `to` needs the merged record,
+ * which doesn't exist without proposed changes, so it defers to {@link checkTransition}.
  */
 export const available = (
-  map: TransitionMap,
+  rules: TransitionMap,
   model: string,
   record: Row,
   options: AuthorizeOptions = {},
 ): string[] => {
-  const actions = map[model];
+  const actions = rules[model];
   if (!actions) return [];
   const { actor, authorize } = options;
 
-  const allows = (rule: Action['permission'], rec: Row): boolean =>
+  const allows = (rule: ActionRule | undefined, rec: Row): boolean =>
     !authorize || rule === undefined || authorize(rule, rec, actor);
 
   return Object.entries(actions)
     .filter(([, action]) =>
       action.paths.some(
         (path) =>
-          checkRule(path.from.predicate, record) === true &&
-          allows(action.permission, record) &&
-          allows(path.from.permission, record),
+          checkRule(path.from.predicate, record) === true && allows(path.from.permission, record),
       ),
     )
-    .map(([verb]) => verb);
+    .map(([action]) => action);
 };
 
 /**
- * Set query: one OR'd Prisma `where` matching every record currently eligible for `verb`
+ * Set query: one OR'd Prisma `where` matching every record currently eligible for `action`
  * (the union of all its paths' `from` predicates). Empty action → match-nothing.
  */
-export const eligible = (map: TransitionMap, model: string, verb: string): Row => {
-  const action = getAction(map, model, verb);
-  const { steps } = toPrisma({ any: action.paths.map((path) => path.from.predicate) });
+export const eligible = (rules: TransitionMap, model: string, action: string): Row => {
+  const found = getAction(rules, model, action);
+  const { steps } = toPrisma({ any: found.paths.map((path) => path.from.predicate) });
   // json-rules guarantees the last step is the WhereStep. Assert it loudly rather than cast-and-swallow:
-  // a silent `{}` fallback would mean match-EVERYTHING — the dangerous inverse of the intended
-  // match-nothing — if a future json-rules emits a trailing non-where step or multi-step relation refs.
+  // a silent `{}` fallback would mean match-EVERYTHING — the dangerous inverse of match-nothing.
   const last = steps[steps.length - 1] as { operation?: string; where?: Row } | undefined;
   if (last?.operation !== 'where' || last.where === undefined)
     throw new Error('transition: expected a terminal WhereStep from toPrisma; got none');

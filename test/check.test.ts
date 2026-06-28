@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { check as checkRule, Operator } from '@inixiative/json-rules';
 import type { Authorize, Transition } from '../index';
-import { checkTransition } from '../index';
+import { checkPath } from '../index';
 
 const approve: Transition = {
   from: { predicate: { field: 'status', operator: Operator.equals, value: 'pending' } },
@@ -15,89 +15,85 @@ const authorize: Authorize = (rule, record) => {
   return rule !== 'DENY';
 };
 
-describe('checkTransition — legality', () => {
+describe('checkPath — legality', () => {
   test('passes when from matches current and to matches merged', () => {
-    const result = checkTransition(approve, { status: 'pending' }, { status: 'approved' });
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.path).toBe(approve);
+    expect(checkPath(approve, { status: 'pending' }, { status: 'approved' })).toBe(true);
   });
 
-  test('no-from when the current state does not match', () => {
-    const result = checkTransition(approve, { status: 'approved' }, { status: 'approved' });
-    expect(result).toMatchObject({ ok: false, reason: { kind: 'no-from' } });
-    if (!result.ok) expect(typeof result.reason.from).toBe('string');
+  test('reports from when the current state does not match', () => {
+    const result = checkPath(approve, { status: 'approved' }, { status: 'approved' });
+    expect(result).not.toBe(true);
+    if (result !== true) {
+      expect(typeof result.from?.predicate).toBe('string');
+      expect(result.to).toBeUndefined();
+    }
   });
 
-  test('no-to when the merged state is not a valid target', () => {
-    const result = checkTransition(approve, { status: 'pending' }, { status: 'rejected' });
-    expect(result).toMatchObject({ ok: false, reason: { kind: 'no-to' } });
-    if (!result.ok) expect(typeof result.reason.to).toBe('string');
+  test('reports to when the merged state is not a valid target', () => {
+    const result = checkPath(approve, { status: 'pending' }, { status: 'rejected' });
+    expect(result).not.toBe(true);
+    if (result !== true) {
+      expect(typeof result.to?.predicate).toBe('string');
+      expect(result.from).toBeUndefined();
+    }
   });
 
   test('merge produces the record `to` is evaluated against', () => {
     // no changes → merged === current → status stays 'pending' → to fails
-    const result = checkTransition(approve, { status: 'pending' });
-    expect(result).toMatchObject({ ok: false, reason: { kind: 'no-to' } });
+    const result = checkPath(approve, { status: 'pending' });
+    expect(result).not.toBe(true);
+    if (result !== true) expect(result.to?.predicate).toBeDefined();
   });
 });
 
-describe('checkTransition — authz', () => {
+describe('checkPath — authz', () => {
   test('absent permission is open', () => {
-    expect(
-      checkTransition(approve, { status: 'pending' }, { status: 'approved' }, { authorize }).ok,
-    ).toBe(true);
-  });
-
-  test('action baseline denial → unauthorized(action)', () => {
-    const result = checkTransition(
-      approve,
-      { status: 'pending' },
-      { status: 'approved' },
-      { authorize, basePermission: 'DENY' },
+    expect(checkPath(approve, { status: 'pending' }, { status: 'approved' }, { authorize })).toBe(
+      true,
     );
-    expect(result).toMatchObject({ ok: false, reason: { kind: 'unauthorized', authz: 'action' } });
   });
 
-  test('from permission denial → unauthorized(from)', () => {
+  test('from permission denial → from.permission', () => {
     const t: Transition = { ...approve, from: { ...approve.from, permission: 'DENY' } };
-    const result = checkTransition(t, { status: 'pending' }, { status: 'approved' }, { authorize });
-    expect(result).toMatchObject({ ok: false, reason: { kind: 'unauthorized', authz: 'from' } });
+    const result = checkPath(t, { status: 'pending' }, { status: 'approved' }, { authorize });
+    expect(result).not.toBe(true);
+    if (result !== true) expect(result.from?.permission).toBe('not authorized');
   });
 
-  test('to permission denial → unauthorized(to)', () => {
+  test('to permission denial → to.permission', () => {
     const t: Transition = { ...approve, to: { ...approve.to, permission: 'DENY' } };
-    const result = checkTransition(t, { status: 'pending' }, { status: 'approved' }, { authorize });
-    expect(result).toMatchObject({ ok: false, reason: { kind: 'unauthorized', authz: 'to' } });
+    const result = checkPath(t, { status: 'pending' }, { status: 'approved' }, { authorize });
+    expect(result).not.toBe(true);
+    if (result !== true) expect(result.to?.permission).toBe('not authorized');
   });
 
   test('null permission is a terminal deny (vs undefined = open)', () => {
     const t: Transition = { ...approve, from: { ...approve.from, permission: null } };
-    // reference-style authorize: null → false
     const denyNull: Authorize = (rule, record) =>
       rule === null ? false : authorize(rule, record, null);
-    const result = checkTransition(
+    const result = checkPath(
       t,
       { status: 'pending' },
       { status: 'approved' },
       { authorize: denyNull },
     );
-    expect(result).toMatchObject({ ok: false, reason: { kind: 'unauthorized', authz: 'from' } });
+    expect(result).not.toBe(true);
+    if (result !== true) expect(result.from?.permission).toBe('not authorized');
   });
 
-  test('legality is checked before authz', () => {
+  test('predicate and permission failures on a side are reported together', () => {
+    // from.predicate fails AND from.permission denies → both surface on the from side
     const t: Transition = { ...approve, from: { ...approve.from, permission: 'DENY' } };
-    // from.predicate already fails → we report no-from, never reach authz
-    const result = checkTransition(
-      t,
-      { status: 'approved' },
-      { status: 'approved' },
-      { authorize },
-    );
-    expect(result).toMatchObject({ ok: false, reason: { kind: 'no-from' } });
+    const result = checkPath(t, { status: 'approved' }, { status: 'approved' }, { authorize });
+    expect(result).not.toBe(true);
+    if (result !== true) {
+      expect(result.from?.predicate).toBeDefined();
+      expect(result.from?.permission).toBe('not authorized');
+    }
   });
 });
 
-describe('the load-bearing asymmetry — from.permission sees the OLD value', () => {
+describe('the load-bearing asymmetry', () => {
   // "only when currently an owner" — an ABAC rule on a CHANGING field.
   const removeOwner: Transition = {
     from: {
@@ -109,13 +105,7 @@ describe('the load-bearing asymmetry — from.permission sees the OLD value', ()
 
   test('from.permission authorizes against the current (pre-change) record', () => {
     // merged record has role: 'member' — if from.permission were evaluated there it would WRONGLY deny.
-    const result = checkTransition(
-      removeOwner,
-      { role: 'owner' },
-      { role: 'member' },
-      { authorize },
-    );
-    expect(result.ok).toBe(true);
+    expect(checkPath(removeOwner, { role: 'owner' }, { role: 'member' }, { authorize })).toBe(true);
   });
 
   test('to.permission authorizes against the merged (post-change) record', () => {
@@ -126,12 +116,6 @@ describe('the load-bearing asymmetry — from.permission sees the OLD value', ()
         permission: { rule: { field: 'role', operator: Operator.equals, value: 'owner' } },
       },
     };
-    const result = checkTransition(
-      grantOwner,
-      { role: 'member' },
-      { role: 'owner' },
-      { authorize },
-    );
-    expect(result.ok).toBe(true);
+    expect(checkPath(grantOwner, { role: 'member' }, { role: 'owner' }, { authorize })).toBe(true);
   });
 });

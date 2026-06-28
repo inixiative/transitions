@@ -3,16 +3,10 @@ import type { Condition } from '@inixiative/json-rules';
 export type Row = Record<string, unknown>;
 
 /**
- * The serializable permission algebra.
- *
- * Re-declared here — deliberately NOT imported from any app's permissions package — so
- * `@inixiative/transitions` stays a zero-app-dependency primitive. It is structurally
- * identical to the rebac `ActionRule` used by `@template/permissions`, so a permission
- * rule authored over there deserializes into a transition's `permission` field unchanged.
- *
- * The kernel never *interprets* an ActionRule; it hands the rule to an injected
- * {@link Authorize} callback. Resolving `string` (delegate) and `{ rel, action }`
- * (relation walk) requires a model + schema, which lives in the authorizer, not here.
+ * The serializable permission algebra. Re-declared here (not imported from any app's
+ * permissions package) so this stays a zero-app-dependency primitive; structurally identical
+ * to `@template/permissions`' rebac `ActionRule`. The kernel never interprets it — it hands the
+ * rule to an injected {@link Authorize} callback.
  */
 export type ActionRule =
   | string // delegate to another action on the same model (resolved by the authorizer)
@@ -26,10 +20,8 @@ export type ActionRule =
 export type Actor = ({ id?: string | null } & Row) | null | undefined;
 
 /**
- * Injected permission evaluator. Model-free by design: the kernel knows nothing about
- * models or schemas, so the consumer closes over whatever its rebac needs (see
- * {@link makeRebacAuthorize} for the reference implementation). Returns a bare boolean —
- * authz is yes/no; the structured-reason machinery lives in the kernel.
+ * Injected permission evaluator. Model-free: the kernel knows nothing about models or schemas,
+ * so the consumer closes over whatever its rebac needs (see {@link makeRebacAuthorize}).
  */
 export type Authorize = (rule: ActionRule, record: Row, actor: Actor) => boolean;
 
@@ -47,13 +39,13 @@ export type Merge<R extends Row = Row> = ((record: R, changes: Partial<R>) => R)
 export type Include = Record<string, unknown>;
 
 /**
- * One half of a transition. `predicate` (legality) and `permission` (authz) are evaluated
- * against the SAME record — and which record is the load-bearing asymmetry:
- * `from.*` reads the CURRENT record, `to.*` reads the RESULTING (merged) record.
+ * One half of a transition. `predicate` (legality) and `permission` (authz) are both evaluated
+ * against the SAME record — the load-bearing asymmetry is WHICH record: `from.*` reads the
+ * CURRENT record, `to.*` reads the RESULTING (merged) record.
  */
 export type Side = {
   predicate: Condition; // json-rules — is this state shape legal?
-  permission?: ActionRule; // authz w.r.t. THIS side's record. Absent = open.
+  permission?: ActionRule; // authz against THIS side's record. Absent = open.
   requires?: Include; // relations the predicate reads (metadata; for the future loader)
 };
 
@@ -61,53 +53,46 @@ export type ToSide<R extends Row = Row> = Side & { merge?: Merge<R> };
 
 /** An atomic edge: `from → to`. Disjunction lives at the action level, never here. */
 export type Transition<R extends Row = Row> = {
-  from: Side; // predicate + permission against the CURRENT record
-  to: ToSide<R>; // predicate + permission against the RESULTING (merged) record
+  from: Side;
+  to: ToSide<R>;
 };
 
 /**
- * A named verb: the OR of its edges. An object (not a bare `Transition[]`) because the
- * action is the unit of authorization (`permission`, ANDed with each side) and affordance
- * (`label`).
+ * A named verb: the OR of its edges. An object (not a bare `Transition[]`) so the action can
+ * carry affordance metadata (`label`). Authorization lives on the per-side `permission`s, which
+ * always read a concrete record — there is no record-free action-level permission.
  */
 export type Action<R extends Row = Row> = {
   paths: Transition<R>[]; // OR of edges; single-path action = array of one
-  permission?: ActionRule; // verb capability, state-independent; ANDed with from/to permissions
   label?: string; // affordance UI
 };
 
-/** `model → verb → Action`. Mirrors the shape of a rebac schema. */
+/** `model → action → Action`. Mirrors the shape of a rebac schema. */
 export type TransitionMap = Record<string, Record<string, Action>>;
 
 // --- check result ---
 
-export type FailureKind = 'no-from' | 'no-to' | 'unauthorized';
-export type AuthzLevel = 'action' | 'from' | 'to';
-
-export type PathFailure = {
-  from?: string; // json-rules reason when from.predicate failed
-  to?: string; // json-rules reason when to.predicate failed
-  authz?: AuthzLevel; // which permission level denied
+/** Why one side failed. Both keys are independent; either, both, or neither may be set. */
+export type SideReason = {
+  predicate?: string; // json-rules reason when the side's predicate failed
+  permission?: string; // set when the side's permission denied
 };
 
-export type Reason = PathFailure & {
-  kind: FailureKind; // drives 409 (no-from/no-to) vs 403 (unauthorized) at the callsite
-  paths?: PathFailure[]; // per-candidate-path detail (registry-level, multi-path)
+/** Why one candidate path failed — `from` and `to` reported separately. */
+export type PathReason = {
+  from?: SideReason;
+  to?: SideReason;
 };
 
-export type CheckResult<R extends Row = Row> =
-  | { ok: true; path: Transition<R> }
-  | { ok: false; reason: Reason };
+/** Why an action failed: one {@link PathReason} per candidate path that was tried. */
+export type Reason = {
+  paths: PathReason[];
+};
+
+/** `true` when the transition is allowed, else a structured {@link Reason}. */
+export type CheckResult = true | Reason;
 
 /** Options threaded into a check. Omit `authorize` to evaluate legality only. */
-export type CheckOptions = {
-  actor?: Actor;
-  authorize?: Authorize;
-  /** Action-level baseline permission, ANDed against the current record (supplied by the registry). */
-  basePermission?: ActionRule;
-};
-
-/** Options for affordance/check at the registry level. */
 export type AuthorizeOptions = {
   actor?: Actor;
   authorize?: Authorize;
