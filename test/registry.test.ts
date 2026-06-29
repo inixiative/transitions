@@ -195,3 +195,39 @@ describe('eligible — set query via toPrisma', () => {
     });
   });
 });
+
+describe('map-qualified resource keys', () => {
+  // The resource key is opaque to the kernel, so map-qualified `db:Inquiry` keys (matching the
+  // permissions rebac schema) work as-is — no structural change, just the shared convention.
+  const qualified: TransitionMap = {
+    'db:Inquiry': {
+      approve: {
+        paths: [
+          {
+            from: { predicate: eq('status', 'pending') },
+            to: { predicate: eq('status', 'approved') },
+          },
+        ],
+      },
+    },
+  };
+
+  test('checkTransition / available / eligible resolve a `map:model` resource', () => {
+    expect(
+      checkTransition(
+        qualified,
+        'db:Inquiry',
+        'approve',
+        { status: 'pending' },
+        { status: 'approved' },
+      ),
+    ).toBe(true);
+    expect(available(qualified, 'db:Inquiry', { status: 'pending' })).toEqual(['approve']);
+    expect(eligible(qualified, 'db:Inquiry', 'approve')).toEqual({
+      OR: [{ status: { equals: 'pending' } }],
+    });
+    expect(() =>
+      checkTransition(qualified, 'db:Unknown', 'approve', { status: 'pending' }),
+    ).toThrow(/on resource "db:Unknown"/);
+  });
+});

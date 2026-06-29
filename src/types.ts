@@ -67,7 +67,9 @@ export type Action<R extends Row = Row> = {
   label?: string; // affordance UI
 };
 
-/** `model → action → Action`. Mirrors the shape of a rebac schema. */
+/** `resource → action → Action`, where `resource` is the (map-qualified) key — e.g. `db:Inquiry`,
+ *  matching `@inixiative/permissions`' rebac schema keys so a transition's `permission` resolves
+ *  against the same resource identity. */
 export type TransitionMap = Record<string, Record<string, Action>>;
 
 // --- check result ---

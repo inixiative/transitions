@@ -10,9 +10,10 @@ import type {
   TransitionMap,
 } from './types';
 
-const getAction = (rules: TransitionMap, model: string, action: string): Action => {
-  const found = rules[model]?.[action];
-  if (!found) throw new Error(`transition: no action "${action}" registered on model "${model}"`);
+const getAction = (rules: TransitionMap, resource: string, action: string): Action => {
+  const found = rules[resource]?.[action];
+  if (!found)
+    throw new Error(`transition: no action "${action}" registered on resource "${resource}"`);
   return found;
 };
 
@@ -20,16 +21,20 @@ const getAction = (rules: TransitionMap, model: string, action: string): Action 
  * Authoritative check: the FIRST path whose `from` matches the current record, whose `to` matches
  * the merged record, and whose permissions all pass, wins → `true`. If none pass, returns a
  * {@link Reason} with one {@link PathReason} per candidate path tried.
+ *
+ * `resource` is the (map-qualified) key into the map — e.g. `db:Inquiry`. Cross-source `permission`
+ * checks are handled by the injected {@link Authorize} (wire it to a bridge-aware rebac check, bound
+ * to this resource); a `predicate` that reads a bridged relation expects a stitched record.
  */
 export const checkTransition = (
   rules: TransitionMap,
-  model: string,
+  resource: string,
   action: string,
   record: Row,
   changes: Row = {},
   options: AuthorizeOptions = {},
 ): CheckResult => {
-  const found = getAction(rules, model, action);
+  const found = getAction(rules, resource, action);
   const paths: PathReason[] = [];
   for (const path of found.paths) {
     const result = checkPath(path, record, changes, options);
@@ -46,11 +51,11 @@ export const checkTransition = (
  */
 export const available = (
   rules: TransitionMap,
-  model: string,
+  resource: string,
   record: Row,
   options: AuthorizeOptions = {},
 ): string[] => {
-  const actions = rules[model];
+  const actions = rules[resource];
   if (!actions) return [];
   const { actor, authorize } = options;
 
@@ -71,8 +76,8 @@ export const available = (
  * Set query: one OR'd Prisma `where` matching every record currently eligible for `action`
  * (the union of all its paths' `from` predicates). Empty action → match-nothing.
  */
-export const eligible = (rules: TransitionMap, model: string, action: string): Row => {
-  const found = getAction(rules, model, action);
+export const eligible = (rules: TransitionMap, resource: string, action: string): Row => {
+  const found = getAction(rules, resource, action);
   const { steps } = toPrisma({ any: found.paths.map((path) => path.from.predicate) });
   // json-rules guarantees the last step is the WhereStep. Assert it loudly rather than cast-and-swallow:
   // a silent `{}` fallback would mean match-EVERYTHING — the dangerous inverse of match-nothing.
