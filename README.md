@@ -17,10 +17,13 @@ no deploy to change a lifecycle).
 ## Model
 
 ```
-model → action → Action { paths: Transition[], label? }
-                          Transition { from: Side, to: Side & { merge? } }
-                          Side       { predicate, permission?, requires? }
+resource → action → Action { paths: Transition[], label? }
+                             Transition { from: Side, to: Side & { merge? } }
+                             Side       { predicate, permission?, requires? }
 ```
+
+A `resource` key is map-qualified (`map:Model`, e.g. `db:Inquiry`) — the same convention
+`@inixiative/permissions` uses, so a transition's `permission` can delegate into the rebac schema.
 
 A `Transition` is one atomic `from → to` edge. An **Action** (a named verb) is the OR of its edges —
 disjunction lives at the action level, never inside a `Transition`, so the kernel stays atomic and
@@ -37,7 +40,7 @@ concrete record, so there is no record-free action-level permission.
 import { checkTransition } from '@inixiative/transitions';
 
 const rules = {
-  inquiry: {
+  'db:Inquiry': {
     approve: {
       paths: [
         {
@@ -49,14 +52,14 @@ const rules = {
   },
 };
 
-checkTransition(rules, 'inquiry', 'approve', { status: 'pending' }, { status: 'approved' });
+checkTransition(rules, 'db:Inquiry', 'approve', { status: 'pending' }, { status: 'approved' });
 // → true
 
-checkTransition(rules, 'inquiry', 'approve', { status: 'approved' }, { status: 'approved' });
+checkTransition(rules, 'db:Inquiry', 'approve', { status: 'approved' }, { status: 'approved' });
 // → { paths: [{ from: { predicate: 'status must equal "pending"' } }] }
 ```
 
-`checkTransition(rules, model, action, record, changes, { actor, authorize })` returns **`true`** when
+`checkTransition(rules, resource, action, record, changes, { actor, authorize })` returns **`true`** when
 allowed, else a structured **`Reason`** — never a bare bool:
 
 ```ts
@@ -83,8 +86,8 @@ The kernel never imports an authorization library. Per-side `permission` is a se
 ```ts
 import { checkTransition, createRebac } from '@inixiative/transitions';
 
-const authorize = createRebac({ schema: rebacSchema })('inquiry');
-checkTransition(rules, 'inquiry', 'approve', record, changes, { actor, authorize });
+const authorize = createRebac({ schema: rebacSchema })('db:Inquiry');
+checkTransition(rules, 'db:Inquiry', 'approve', record, changes, { actor, authorize });
 ```
 
 Effective authz ANDs the two side rules, each against the record it reads:
@@ -100,19 +103,20 @@ Absent = open; `null` = terminal deny. Omit `authorize` to check legality only.
 
 This package ships a **reference** rebac evaluator (`string` delegation, relation walk with cycle
 detection, `{ self }`, json-rules `{ rule }`, `any`/`all`, per-row `permissionRules` override). It's
-one implementation of the `Authorize` seam, kept deliberately swappable. It is slated to graduate
-into a standalone `@inixiative/permissions` package — when it does, inject that instead; nothing in
-the transition core changes.
+one implementation of the `Authorize` seam, kept deliberately swappable. The standalone
+[`@inixiative/permissions`](https://github.com/inixiative/permissions) package is the production
+evaluator — inject its `check` as the `authorize` seam (it speaks the same map-qualified
+`resource` keys); nothing in the transition core changes.
 
 ## Affordance + set query
 
 ```ts
 import { available, eligible } from '@inixiative/transitions';
 
-available(rules, 'inquiry', record, { actor, authorize });
+available(rules, 'db:Inquiry', record, { actor, authorize });
 // → ['approve', 'reject', 'cancel']   (from-side only — `to` needs proposed changes, so it defers to checkTransition)
 
-eligible(rules, 'inquiry', 'approve');
+eligible(rules, 'db:Inquiry', 'approve');
 // → { OR: [{ status: { equals: 'pending' } }] }   (Prisma where for "every record eligible for approve")
 ```
 
