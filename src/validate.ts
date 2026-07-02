@@ -5,6 +5,7 @@ import {
   type LensNarrowing,
   validateRule,
 } from '@inixiative/json-rules';
+import { actionRuleSchema } from '@inixiative/permissions/actionRuleSchema';
 import { isSerializableMerge } from './merge';
 import type { ActionRule, Merge, Side, ToSide, Transition } from './types';
 
@@ -22,11 +23,15 @@ const MERGE_KEYWORDS = new Set(['spread', 'deepMerge']);
 const ARRAY_KINDS = new Set(['append', 'appendUnique']);
 
 const validatePredicate = (
-  predicate: Condition,
+  predicate: Condition | undefined,
   errors: ValidationIssue[],
   path: string,
   lens?: Lens | LensNarrowing,
 ): void => {
+  if (predicate === undefined) {
+    errors.push({ path, message: 'predicate is required' });
+    return;
+  }
   const result = validateRule(predicate);
   for (const issue of result.errors)
     errors.push({ path: `${path}.${issue.path}`, message: issue.message });
@@ -37,40 +42,26 @@ const validatePredicate = (
   }
 };
 
+// Validate the whole ActionRule against `@inixiative/permissions`' zod schema — the single source of
+// truth for the algebra (boolean terminals, string delegation, `{ rel, action }`, `{ self }`, abac
+// `{ rule }`, `any`/`all`, `null`). A malformed rule yields a structured issue rather than throwing.
 const validatePermission = (
   rule: ActionRule | undefined,
   errors: ValidationIssue[],
   path: string,
 ): void => {
-  if (rule === undefined || rule === null || typeof rule === 'string') return;
-  if ('rule' in rule) {
-    const result = validateRule(rule.rule);
-    for (const issue of result.errors)
-      errors.push({ path: `${path}.rule.${issue.path}`, message: issue.message });
-    return;
+  if (rule === undefined) return; // absent = open
+  const parsed = actionRuleSchema.safeParse(rule);
+  if (parsed.success) return;
+  for (const issue of parsed.error.issues) {
+    // A root union failure (zod reports an empty relative path) means none of the ActionRule shapes
+    // matched; nested issues keep their zod path + message.
+    if (issue.path.length === 0) {
+      errors.push({ path, message: 'unrecognized ActionRule shape' });
+    } else {
+      errors.push({ path: `${path}.${issue.path.join('.')}`, message: issue.message });
+    }
   }
-  if ('rel' in rule) {
-    if (!rule.rel || !rule.action)
-      errors.push({ path, message: 'rel-rule requires non-empty `rel` and `action`' });
-    return;
-  }
-  if ('self' in rule) {
-    if (!rule.self) errors.push({ path, message: 'self-rule requires a non-empty field name' });
-    return;
-  }
-  if ('any' in rule) {
-    rule.any.forEach((sub, i) => {
-      validatePermission(sub, errors, `${path}.any[${i}]`);
-    });
-    return;
-  }
-  if ('all' in rule) {
-    rule.all.forEach((sub, i) => {
-      validatePermission(sub, errors, `${path}.all[${i}]`);
-    });
-    return;
-  }
-  errors.push({ path, message: 'unrecognized ActionRule shape' });
 };
 
 const validateMerge = (merge: Merge | undefined, errors: ValidationIssue[], path: string): void => {
@@ -86,11 +77,15 @@ const validateMerge = (merge: Merge | undefined, errors: ValidationIssue[], path
 };
 
 const validateSide = (
-  side: Side | ToSide,
+  side: Side | ToSide | undefined,
   errors: ValidationIssue[],
   path: string,
   options: ValidateOptions,
 ): void => {
+  if (side === null || typeof side !== 'object') {
+    errors.push({ path, message: `\`${path}\` side is required` });
+    return;
+  }
   validatePredicate(side.predicate, errors, `${path}.predicate`, options.lens);
   validatePermission(side.permission, errors, `${path}.permission`);
   if (side.requires !== undefined && (typeof side.requires !== 'object' || side.requires === null))
@@ -103,17 +98,19 @@ const validateSide = (
 
 /**
  * Authoring validation for a single transition — run on save before persisting a tenant config.
- * Predicate validity delegates to json-rules (`validateRule`, plus `checkRuleAgainstLens` when a
- * `lens` is supplied for field/relation scoping); merge strategy and permission shape are checked here.
+ * Returns structured issues (never throws) on malformed input: predicate validity delegates to
+ * json-rules (`validateRule`, plus `checkRuleAgainstLens` when a `lens` is supplied for
+ * field/relation scoping); permission shape delegates to `@inixiative/permissions`' `actionRuleSchema`;
+ * merge strategy is checked here.
  */
 export const validateTransition = (
   transition: Transition,
   options: ValidateOptions = {},
 ): ValidationResult => {
   const errors: ValidationIssue[] = [];
-  validateSide(transition.from, errors, 'from', options);
-  validateSide(transition.to, errors, 'to', options);
-  if (options.requireSerializable && !isSerializableMerge(transition.to.merge))
+  validateSide(transition?.from, errors, 'from', options);
+  validateSide(transition?.to, errors, 'to', options);
+  if (options.requireSerializable && !isSerializableMerge(transition?.to?.merge))
     errors.push({
       path: 'to.merge',
       message: 'callback merge is not serializable; use a keyword strategy',

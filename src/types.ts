@@ -1,27 +1,23 @@
 import type { Condition } from '@inixiative/json-rules';
+import type { ActionRule } from '@inixiative/permissions';
 
 export type Row = Record<string, unknown>;
 
 /**
- * The serializable permission algebra. Re-declared here (not imported from any app's
- * permissions package) so this stays a zero-app-dependency primitive; structurally identical
- * to `@template/permissions`' rebac `ActionRule`. The kernel never interprets it — it hands the
- * rule to an injected {@link Authorize} callback.
+ * The serializable permission algebra — re-exported straight from `@inixiative/permissions`, the
+ * single source of truth (string delegation, `{ rel, action }`, `{ self }`, abac `{ rule }`,
+ * `any`/`all`, boolean terminals `true`/`false`, and `null`). The kernel never interprets it — it
+ * hands the rule to an injected {@link Authorize} callback (see {@link createAuthorize}, which
+ * bridges permissions' `check`).
  */
-export type ActionRule =
-  | string // delegate to another action on the same model (resolved by the authorizer)
-  | { rel: string; action: string } // walk a relation, then check `action` on the target
-  | { self: string } // record[field] === actor.id
-  | { rule: Condition } // ABAC predicate over the record (json-rules)
-  | { any: ActionRule[] } // OR
-  | { all: ActionRule[] } // AND
-  | null; // terminal deny
+export type { ActionRule };
 
 export type Actor = ({ id?: string | null } & Row) | null | undefined;
 
 /**
- * Injected permission evaluator. Model-free: the kernel knows nothing about models or schemas,
- * so the consumer closes over whatever its rebac needs (see {@link makeRebacAuthorize}).
+ * Injected permission evaluator. Resource-free: the kernel knows nothing about resources or schemas,
+ * so the consumer closes over whatever its rebac needs (see {@link createAuthorize}, the adapter
+ * over `@inixiative/permissions`).
  */
 export type Authorize = (rule: ActionRule, record: Row, actor: Actor) => boolean;
 

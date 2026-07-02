@@ -80,13 +80,14 @@ else every path's `PathReason`.
 ## Permissions are injected (the seam)
 
 The kernel never imports an authorization library. Per-side `permission` is a serializable
-`ActionRule` (the same rebac/abac/rbac algebra as `@template/permissions`), and you inject an
-`authorize` callback to evaluate it:
+`ActionRule` re-exported straight from [`@inixiative/permissions`](https://github.com/inixiative/permissions)
+(`string` delegation, `{ rel, action }`, `{ self }`, abac `{ rule }`, `any`/`all`, boolean terminals
+`true`/`false`, `null`), and you inject an `authorize` callback to evaluate it:
 
 ```ts
-import { checkTransition, createRebac } from '@inixiative/transitions';
+import { checkTransition, createAuthorize } from '@inixiative/transitions';
 
-const authorize = createRebac({ schema: rebacSchema })('db:Inquiry');
+const authorize = createAuthorize({ schema: rebacSchema })('db:Inquiry');
 checkTransition(rules, 'db:Inquiry', 'approve', record, changes, { actor, authorize });
 ```
 
@@ -97,16 +98,34 @@ from.permission   AND   to.permission
 (current record)        (merged record)
 ```
 
-Absent = open; `null` = terminal deny. Omit `authorize` to check legality only.
+Absent = open; `null` (or `false`) = terminal deny. Omit `authorize` to check legality only.
 
-### `createRebac` / `makeRebacAuthorize` — reference implementation
+### `createAuthorize` — the `@inixiative/permissions` adapter
 
-This package ships a **reference** rebac evaluator (`string` delegation, relation walk with cycle
-detection, `{ self }`, json-rules `{ rule }`, `any`/`all`, per-row `permissionRules` override). It's
-one implementation of the `Authorize` seam, kept deliberately swappable. The standalone
-[`@inixiative/permissions`](https://github.com/inixiative/permissions) package is the production
-evaluator — inject its `check` as the `authorize` seam (it speaks the same map-qualified
-`resource` keys); nothing in the transition core changes.
+Authorization is **not** reimplemented here. `createAuthorize` is a thin adapter that bridges
+`@inixiative/permissions`' production rebac `check` onto the `Authorize` seam:
+`createAuthorize(options)(resource)` returns an `Authorize` bound to a (map-qualified) `resource`.
+permissions owns the whole evaluation — `string` delegation with **cycle detection**, intra-map `rel`
+walks (via an injected `resolveRelation`), cross-map bridge walks, `{ self }`, abac `{ rule }`, boolean
+terminals, `any`/`all`, and per-row `permissionRules` overrides. It speaks the same map-qualified
+`resource` keys as this package.
+
+```ts
+import type { RebacSchema } from '@inixiative/permissions';
+import { createAuthorize } from '@inixiative/transitions';
+
+const schema: RebacSchema = { permissions: { 'db:Inquiry': { actions: { /* … */ } } } };
+const authorize = createAuthorize({
+  schema,
+  resolveRelation, // optional; default: the relation segment name is the resource key
+  isSuperadmin,    // optional; derived from the actor
+})('db:Inquiry');
+```
+
+`options`: `schema` (permissions' `{ bridges?, permissions }`), optional `resolveRelation`,
+`isSuperadmin`, and `data` (supplemental hydrated rows for bridge walks). A cyclic permission graph —
+which permissions surfaces by throwing — is caught and denied (fail closed), so the guard terminates
+cleanly.
 
 ## Affordance + set query
 
@@ -134,7 +153,9 @@ but not (`isSerializable(transition)` tells you which).
 
 `validateTransition(t, { lens?, requireSerializable? })` validates predicates (via json-rules
 `validateRule`, plus `checkRuleAgainstLens` when a `lens` scopes referenceable fields), merge
-strategy, and permission shape — run it on save before persisting a tenant config.
+strategy, and permission shape (via `@inixiative/permissions`' zod `actionRuleSchema`) — run it on
+save before persisting a tenant config. It returns structured `{ ok, errors }` (never throws), even on
+malformed input.
 
 ## Not built yet (designed — see the plan)
 

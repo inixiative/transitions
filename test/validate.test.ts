@@ -51,9 +51,9 @@ describe('validateTransition', () => {
     });
   });
 
-  test('flags a malformed permission rule', () => {
+  test('flags a malformed permission rule (rel-rule missing its action)', () => {
     const t: Transition = {
-      from: { predicate: true, permission: { rel: '', action: '' } },
+      from: { predicate: true, permission: { rel: 'org' } as never },
       to: { predicate: true },
     };
     const result = validateTransition(t);
@@ -70,6 +70,40 @@ describe('validateTransition', () => {
       path: 'from.permission',
       message: 'unrecognized ActionRule shape',
     });
+  });
+
+  // --- structured issues instead of raw TypeErrors on malformed input ---
+
+  test('a boolean-terminal permission (`true`) is legal (permissions 0.3.0) — no throw, valid', () => {
+    const t: Transition = {
+      from: { predicate: true, permission: true },
+      to: { predicate: true, permission: false },
+    };
+    expect(() => validateTransition(t)).not.toThrow();
+    expect(validateTransition(t)).toEqual({ ok: true, errors: [] });
+  });
+
+  test('a missing `to` side yields a structured issue, not a thrown TypeError', () => {
+    const t = { from: { predicate: true } } as unknown as Transition;
+    let result: ReturnType<typeof validateTransition> | undefined;
+    expect(() => {
+      result = validateTransition(t);
+    }).not.toThrow();
+    expect(result?.ok).toBe(false);
+    expect(result?.errors.some((e) => e.path === 'to')).toBe(true);
+  });
+
+  test('a malformed combinator (`{ any: "x" }`) yields a structured issue, not a thrown TypeError', () => {
+    const t: Transition = {
+      from: { predicate: true, permission: { any: 'x' } as never },
+      to: { predicate: true },
+    };
+    let result: ReturnType<typeof validateTransition> | undefined;
+    expect(() => {
+      result = validateTransition(t);
+    }).not.toThrow();
+    expect(result?.ok).toBe(false);
+    expect(result?.errors.some((e) => e.path === 'from.permission')).toBe(true);
   });
 
   test('requireSerializable rejects a callback merge', () => {
