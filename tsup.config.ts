@@ -1,13 +1,8 @@
-import { defineConfig } from 'tsup';
+import { node } from '@inixiative/config/tsup';
 
-export default defineConfig({
+export default node({
   entry: ['index.ts'],
-  format: ['cjs', 'esm'],
-  dts: { compilerOptions: { ignoreDeprecations: '6.0' } },
-  clean: true,
-  sourcemap: true,
   minify: true,
   treeshake: true,
-  outDir: 'dist',
   external: ['@inixiative/json-rules', 'lodash-es'],
 });
