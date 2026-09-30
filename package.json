@@ -1,6 +1,6 @@
 {
   "name": "@inixiative/transitions",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Declarative, serializable transition guard + affordance layer on top of @inixiative/json-rules",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -49,7 +49,7 @@
     "typescript": "6.0.3"
   },
   "peerDependencies": {
-    "typescript": "^5.0.0"
+    "typescript": ">=6.0.0"
   },
   "peerDependenciesMeta": {
     "typescript": {
