@@ -4,11 +4,11 @@ import type {
   ActionRule,
   Actor,
   Authorize,
-  CheckOptions,
   PathReason,
   Row,
   SideReason,
   Transition,
+  TransitionOptions,
 } from './types';
 
 const predicateReason = (result: boolean | string): string =>
@@ -35,13 +35,13 @@ const denies = (
  * `from`/`to` and predicate/permission are independent slots — so a caller sees the whole
  * picture. `from.*` reads the current `record`, `to.*` reads the merged `next` record. Returns
  * `true` when the edge is allowed, else the {@link PathReason}. Omit `authorize` for legality only;
- * `now` / `bindings` reach both predicates.
+ * json-rules' `check()` options (`now`, `bindings`, `context`, …) reach both predicates.
  */
 export const checkPath = <R extends Row>(
   transition: Transition<R>,
   record: R,
   changes: Partial<R> = {},
-  options: CheckOptions = {},
+  options: TransitionOptions = {},
 ): true | PathReason => {
   const { actor, authorize, ...evaluation } = options;
   const next = applyMerge(transition.to.merge, record, changes);

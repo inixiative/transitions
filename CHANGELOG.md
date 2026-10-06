@@ -1,18 +1,23 @@
 # Changelog
 
-## 0.2.0 — predicates evaluate with `now` and `bindings`
+## 0.2.0 — predicates evaluate with json-rules' `check()` options
 
-- `checkTransition`, `checkPath` and `available` take `now`, `timeZone`, `weekStart` and
-  `bindings` alongside `actor` / `authorize` (`CheckOptions = AuthorizeOptions & EvaluationOptions`),
-  and pass them to json-rules for both sides. Before, the kernel called `check()` with no
-  options, so a predicate with a relative date (`{ ago: … }`) or a `{ bind }` token threw.
-- `eligible(rules, resource, action, options?)` takes the same `EvaluationOptions`: bindings are
-  resolved into the union of `from` predicates and `now` anchors relative dates before
-  `toPrisma`, so the set query and the single check agree.
-- json-rules `^2.27.0`, where date rules honor `bind` in `check()`.
-- **First consumer:** Zealot platform alert incidents. `autoResolve` is guarded by
-  `lastBreachedAt before { bind: 'quietWindow' }`; the evaluator binds each rule's
-  `{ ago: { seconds: autoResolveAfterSeconds } }` and selects the incidents with `eligible`.
+- `checkTransition`, `checkPath` and `available` take json-rules' own `check()` options —
+  `now`, `timeZone`, `weekStart`, `bindings`, `context` — alongside `actor` / `authorize`
+  (`TransitionOptions = AuthorizeOptions & PredicateOptions`, where `PredicateOptions` is
+  json-rules' `CheckOptions` with `context` a row), and pass them to both sides. Before, the
+  kernel called `check()` with no options, so a predicate with a relative date (`{ ago: … }`),
+  a `{ bind }` token or a context path threw.
+- `eligible(rules, resource, action, options?)` takes the same `PredicateOptions`: bindings are
+  resolved into the union of `from` predicates, and `now` / `context` reach `toPrisma`, so the
+  set query and the single check agree. A guard `toPrisma` can't express — a `$.` row ref in an
+  offset or magnitude — throws rather than return the wrong set.
+- json-rules `^2.27.0`: date and aggregate `bind` on `check()`, `offset` on path and bind,
+  `{ path }` magnitudes.
+- **First consumer:** Zealot platform alert incidents. `autoResolve` reads each incident's
+  window off its own rule — `lastBreachedAt before { ago: { seconds: { path:
+  '$.platformAlertRule.autoResolveAfterSeconds' } } }` — and is checked per incident under a row
+  lock with `checkTransition`.
 
 ## 0.1.0 — reference rebac evaluator replaced by a permissions adapter
 

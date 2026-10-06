@@ -1,4 +1,4 @@
-import type { Condition, DateConfig, RuleValue } from '@inixiative/json-rules';
+import type { CheckOptions, Condition } from '@inixiative/json-rules';
 import type { ActionRule } from '@inixiative/permissions';
 
 export type Row = Record<string, unknown>;
@@ -97,10 +97,12 @@ export type AuthorizeOptions = {
 };
 
 /**
- * What a predicate is evaluated WITH: the clock for relative date expressions and the values
- * of its `{ bind }` tokens. Passed straight to json-rules — the same `now` / `bindings` a bare
- * `check()` takes, so one declaration serves a single record and the {@link eligible} set query.
+ * json-rules' own `check()` options — `now` / `timeZone` / `weekStart` for relative dates,
+ * `bindings` for `{ bind }` tokens, `context` for bare paths — with `context` a row, since a
+ * transition's predicates read rows. Both predicates get them, and {@link eligible} compiles
+ * with them.
  */
-export type EvaluationOptions = { bindings?: Record<string, RuleValue> } & DateConfig;
+export type PredicateOptions = Omit<CheckOptions, 'context'> & { context?: Row };
 
-export type CheckOptions = AuthorizeOptions & EvaluationOptions;
+/** A transition check: who acts, and what its predicates evaluate with. */
+export type TransitionOptions = AuthorizeOptions & PredicateOptions;

@@ -139,19 +139,30 @@ eligible(rules, 'db:Inquiry', 'approve');
 // → { OR: [{ status: { equals: 'pending' } }] }   (Prisma where for "every record eligible for approve")
 ```
 
-A predicate that reads the clock or a `{ bind }` token takes them as options, the same `now` /
-`bindings` json-rules' `check()` takes. `checkTransition`, `checkPath` and `available` pass them to
-both sides; `eligible` resolves the bindings into the predicate and anchors relative dates on `now`
-before compiling, so the set query selects exactly the records the single check accepts:
+A predicate evaluates with the same options json-rules' `check()` takes — `now`, `timeZone`,
+`weekStart`, `bindings`, `context` — passed beside `actor` / `authorize`. `checkTransition`,
+`checkPath` and `available` give them to both sides; `eligible` resolves the bindings into the
+predicate and compiles with `now` / `context`, so the set query selects exactly the records the
+single check accepts:
 
 ```ts
 const quietFor = { field: 'lastBreachedAt', dateOperator: 'before', bind: 'quietWindow' };
-const evaluation = { now, bindings: { quietWindow: { ago: { seconds: rule.autoResolveAfterSeconds } } } };
+const options = { now, bindings: { quietWindow: { ago: { seconds: 1800 } } } };
 
-checkTransition(rules, 'incident', 'autoResolve', incident, { status: 'resolved' }, evaluation);
-eligible(rules, 'incident', 'autoResolve', evaluation);
+checkTransition(rules, 'incident', 'autoResolve', incident, { status: 'resolved' }, options);
+eligible(rules, 'incident', 'autoResolve', options);
 // → { OR: [{ AND: [{ status: … }, { lastBreachedAt: { lt: <now - window> } }] }] }
 ```
+
+A guard can read its window off the record instead — self-contained, nothing to bind:
+
+```ts
+{ field: 'lastBreachedAt', dateOperator: 'before',
+  value: { ago: { seconds: { path: '$.platformAlertRule.autoResolveAfterSeconds' } } } }
+```
+
+`check()` evaluates it per record; `eligible` throws on it, since a Prisma `where` can't do
+arithmetic on a column — it never returns the wrong set.
 
 ## Merge strategies
 

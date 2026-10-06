@@ -64,3 +64,89 @@ describe('now and bindings reach the predicates', () => {
     );
   });
 });
+
+// The same guard, self-contained: each incident's window is read off the row, so nothing is bound.
+const selfContained: TransitionMap = {
+  incident: {
+    autoResolve: {
+      paths: [
+        {
+          from: {
+            predicate: {
+              all: [
+                { field: 'status', operator: Operator.equals, value: 'firing' },
+                {
+                  field: 'lastBreachedAt',
+                  dateOperator: 'before',
+                  value: { ago: { seconds: { path: '$.windowSeconds' } } },
+                },
+              ],
+            },
+          },
+          to: { predicate: { field: 'status', operator: Operator.equals, value: 'resolved' } },
+        },
+      ],
+    },
+  },
+};
+
+describe('a guard that reads its window off the row', () => {
+  const quietForItsWindow = { ...quiet, windowSeconds: 7200 };
+  const recentForItsWindow = { ...quiet, windowSeconds: 4 * 3600 };
+
+  test('checkTransition and available read each record its own window', () => {
+    const changes = { status: 'resolved' };
+    expect(
+      checkTransition(selfContained, 'incident', 'autoResolve', quietForItsWindow, changes, {
+        now,
+      }),
+    ).toBe(true);
+    expect(
+      checkTransition(selfContained, 'incident', 'autoResolve', recentForItsWindow, changes, {
+        now,
+      }),
+    ).not.toBe(true);
+    expect(available(selfContained, 'incident', quietForItsWindow, { now })).toEqual([
+      'autoResolve',
+    ]);
+  });
+
+  test('eligible refuses a row-read window rather than return the wrong set', () => {
+    expect(() => eligible(selfContained, 'incident', 'autoResolve', { now })).toThrow('toPrisma');
+  });
+});
+
+describe('context reaches the predicates', () => {
+  const contextual: TransitionMap = {
+    incident: {
+      autoResolve: {
+        paths: [
+          {
+            from: {
+              predicate: {
+                field: 'lastBreachedAt',
+                dateOperator: 'before',
+                value: { ago: { seconds: { path: 'quietSeconds' } } },
+              },
+            },
+            to: { predicate: true },
+          },
+        ],
+      },
+    },
+  };
+  const options = { now, context: { quietSeconds: 7200 } };
+
+  test('checkTransition', () => {
+    expect(checkTransition(contextual, 'incident', 'autoResolve', quiet, {}, options)).toBe(true);
+    expect(checkTransition(contextual, 'incident', 'autoResolve', recent, {}, options)).not.toBe(
+      true,
+    );
+  });
+
+  test('eligible', () => {
+    expect(eligible(contextual, 'incident', 'autoResolve', options)).toEqual({
+      OR: [{ lastBreachedAt: { lt: new Date('2026-10-06T10:00:00Z') } }],
+    });
+  });
+});
