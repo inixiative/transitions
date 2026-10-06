@@ -4,7 +4,7 @@ import type {
   ActionRule,
   Actor,
   Authorize,
-  AuthorizeOptions,
+  CheckOptions,
   PathReason,
   Row,
   SideReason,
@@ -34,25 +34,26 @@ const denies = (
  * The kernel: evaluate one atomic edge. Reports every failure rather than short-circuiting —
  * `from`/`to` and predicate/permission are independent slots — so a caller sees the whole
  * picture. `from.*` reads the current `record`, `to.*` reads the merged `next` record. Returns
- * `true` when the edge is allowed, else the {@link PathReason}. Omit `authorize` for legality only.
+ * `true` when the edge is allowed, else the {@link PathReason}. Omit `authorize` for legality only;
+ * `now` / `bindings` reach both predicates.
  */
 export const checkPath = <R extends Row>(
   transition: Transition<R>,
   record: R,
   changes: Partial<R> = {},
-  options: AuthorizeOptions = {},
+  options: CheckOptions = {},
 ): true | PathReason => {
-  const { actor, authorize } = options;
+  const { actor, authorize, ...evaluation } = options;
   const next = applyMerge(transition.to.merge, record, changes);
 
   const from: SideReason = {};
-  const fromPredicate = checkRule(transition.from.predicate, record as Row);
+  const fromPredicate = checkRule(transition.from.predicate, record as Row, evaluation);
   if (fromPredicate !== true) from.predicate = predicateReason(fromPredicate);
   if (denies(authorize, transition.from.permission, record as Row, actor))
     from.permission = 'not authorized';
 
   const to: SideReason = {};
-  const toPredicate = checkRule(transition.to.predicate, next as Row);
+  const toPredicate = checkRule(transition.to.predicate, next as Row, evaluation);
   if (toPredicate !== true) to.predicate = predicateReason(toPredicate);
   if (denies(authorize, transition.to.permission, next as Row, actor))
     to.permission = 'not authorized';

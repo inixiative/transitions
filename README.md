@@ -139,6 +139,20 @@ eligible(rules, 'db:Inquiry', 'approve');
 // → { OR: [{ status: { equals: 'pending' } }] }   (Prisma where for "every record eligible for approve")
 ```
 
+A predicate that reads the clock or a `{ bind }` token takes them as options, the same `now` /
+`bindings` json-rules' `check()` takes. `checkTransition`, `checkPath` and `available` pass them to
+both sides; `eligible` resolves the bindings into the predicate and anchors relative dates on `now`
+before compiling, so the set query selects exactly the records the single check accepts:
+
+```ts
+const quietFor = { field: 'lastBreachedAt', dateOperator: 'before', bind: 'quietWindow' };
+const evaluation = { now, bindings: { quietWindow: { ago: { seconds: rule.autoResolveAfterSeconds } } } };
+
+checkTransition(rules, 'incident', 'autoResolve', incident, { status: 'resolved' }, evaluation);
+eligible(rules, 'incident', 'autoResolve', evaluation);
+// → { OR: [{ AND: [{ status: … }, { lastBreachedAt: { lt: <now - window> } }] }] }
+```
+
 ## Merge strategies
 
 `to.merge` produces the resulting record. Keyword strategies are serializable; a callback is full-power

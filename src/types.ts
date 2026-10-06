@@ -1,4 +1,4 @@
-import type { Condition } from '@inixiative/json-rules';
+import type { Condition, DateConfig, RuleValue } from '@inixiative/json-rules';
 import type { ActionRule } from '@inixiative/permissions';
 
 export type Row = Record<string, unknown>;
@@ -95,3 +95,12 @@ export type AuthorizeOptions = {
   actor?: Actor;
   authorize?: Authorize;
 };
+
+/**
+ * What a predicate is evaluated WITH: the clock for relative date expressions and the values
+ * of its `{ bind }` tokens. Passed straight to json-rules — the same `now` / `bindings` a bare
+ * `check()` takes, so one declaration serves a single record and the {@link eligible} set query.
+ */
+export type EvaluationOptions = { bindings?: Record<string, RuleValue> } & DateConfig;
+
+export type CheckOptions = AuthorizeOptions & EvaluationOptions;
