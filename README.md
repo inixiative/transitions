@@ -136,7 +136,7 @@ available(rules, 'db:Inquiry', record, { actor, authorize });
 // → ['approve', 'reject', 'cancel']   (from-side only — `to` needs proposed changes, so it defers to checkTransition)
 
 eligible(rules, 'db:Inquiry', 'approve');
-// → { OR: [{ status: { equals: 'pending' } }] }   (Prisma where for "every record eligible for approve")
+// → { status: { equals: 'pending' } }   (Prisma where for "every record eligible for approve")
 ```
 
 A predicate evaluates with the same options json-rules' `check()` takes — `now`, `timeZone`,
@@ -151,7 +151,7 @@ const options = { now, bindings: { quietWindow: { ago: { seconds: 1800 } } } };
 
 checkTransition(rules, 'incident', 'autoResolve', incident, { status: 'resolved' }, options);
 eligible(rules, 'incident', 'autoResolve', options);
-// → { OR: [{ AND: [{ status: … }, { lastBreachedAt: { lt: <now - window> } }] }] }
+// → { AND: [{ status: … }, { lastBreachedAt: { lt: <now - window> } }] }
 ```
 
 A guard can read its window off the record instead — self-contained, nothing to bind:
@@ -177,10 +177,12 @@ but not (`isSerializable(transition)` tells you which).
 ## Authoring validation
 
 `validateTransition(t, { lens?, requireSerializable? })` validates predicates (via json-rules
-`validateRule`, plus `checkRuleAgainstLens` when a `lens` scopes referenceable fields), merge
+`validateRule`, plus `validateRuleInLens` when a `lens` scopes referenceable fields), merge
 strategy, and permission shape (via `@inixiative/permissions`' zod `actionRuleSchema`) — run it on
-save before persisting a tenant config. It returns structured `{ ok, errors }` (never throws), even on
-malformed input.
+save before persisting a tenant config. It returns json-rules' `ValidationResult` —
+`{ ok, errors: { path, message, code }[] }` — and never throws, even on malformed input. json-rules'
+issues keep their codes; transitions adds `missing_side`, `missing_predicate`, `invalid_permission`,
+`invalid_requires`, `invalid_merge` and `unserializable_merge`.
 
 ## Not built yet (designed — see the plan)
 

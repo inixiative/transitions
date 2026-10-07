@@ -1,7 +1,5 @@
-import type { CheckOptions, Condition } from '@inixiative/json-rules';
+import type { CheckOptions, CompileOptions, Condition, Row } from '@inixiative/json-rules';
 import type { ActionRule } from '@inixiative/permissions';
-
-export type Row = Record<string, unknown>;
 
 /**
  * The serializable permission algebra — re-exported straight from `@inixiative/permissions`, the
@@ -10,7 +8,7 @@ export type Row = Record<string, unknown>;
  * hands the rule to an injected {@link Authorize} callback (see {@link createAuthorize}, which
  * bridges permissions' `check`).
  */
-export type { ActionRule };
+export type { ActionRule, Row };
 
 export type Actor = ({ id?: string | null } & Row) | null | undefined;
 
@@ -98,11 +96,10 @@ export type AuthorizeOptions = {
 
 /**
  * json-rules' own `check()` options — `now` / `timeZone` / `weekStart` for relative dates,
- * `bindings` for `{ bind }` tokens, `context` for bare paths — with `context` a row, since a
- * transition's predicates read rows. Both predicates get them, and {@link eligible} compiles
- * with them.
+ * `bindings` for `{ bind }` tokens — with `context` the compilers' (a {@link Row}), so the same
+ * options serve `check()` and {@link eligible}'s `toPrisma`.
  */
-export type PredicateOptions = Omit<CheckOptions, 'context'> & { context?: Row };
+export type PredicateOptions = Omit<CheckOptions, 'context'> & Pick<CompileOptions, 'context'>;
 
 /** A transition check: who acts, and what its predicates evaluate with. */
 export type TransitionOptions = AuthorizeOptions & PredicateOptions;

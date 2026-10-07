@@ -37,6 +37,7 @@ describe('validateTransition', () => {
     expect(validateTransition(t).errors).toContainEqual({
       path: 'to.merge',
       message: 'unknown merge strategy "smush"',
+      code: 'invalid_merge',
     });
   });
 
@@ -48,6 +49,7 @@ describe('validateTransition', () => {
     expect(validateTransition(t).errors).toContainEqual({
       path: 'to.merge',
       message: 'merge "append" requires a `path`',
+      code: 'invalid_merge',
     });
   });
 
@@ -69,6 +71,7 @@ describe('validateTransition', () => {
     expect(validateTransition(t).errors).toContainEqual({
       path: 'from.permission',
       message: 'unrecognized ActionRule shape',
+      code: 'invalid_permission',
     });
   });
 
@@ -112,6 +115,7 @@ describe('validateTransition', () => {
     expect(validateTransition(t, { requireSerializable: true }).errors).toContainEqual({
       path: 'to.merge',
       message: 'callback merge is not serializable; use a keyword strategy',
+      code: 'unserializable_merge',
     });
   });
 
@@ -123,6 +127,7 @@ describe('validateTransition', () => {
     expect(validateTransition(t).errors).toContainEqual({
       path: 'from.requires',
       message: '`requires` must be a Prisma-include-shaped object',
+      code: 'invalid_requires',
     });
   });
 });
