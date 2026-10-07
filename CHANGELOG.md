@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.3.0 — json-rules 3.0, permissions 0.4.0
+
+- **Requires `@inixiative/json-rules@^3.0.0` and `@inixiative/permissions@^0.4.0`.** Predicates
+  and abac `{ rule }` permissions take json-rules 3.0's semantics: an absent path reads as NULL,
+  a negation keeps NULL rows, values compare as JSON (`"3"` never equals `3`), and a rule
+  json-rules refuses (an `in` with a scalar, an unknown period unit or aggregate mode) throws out
+  of `checkTransition` / `available` / `eligible` instead of answering. Review stored guards that
+  leaned on the old coercions.
+- **`validateTransition` returns json-rules' `ValidationResult`**: each issue is
+  `{ path, message, code }`. json-rules' issues keep their codes; transitions' own are
+  `missing_side`, `missing_predicate`, `invalid_permission`, `invalid_requires`, `invalid_merge`
+  and `unserializable_merge`. The lens check is json-rules' `validateRuleInLens` (was
+  `checkRuleAgainstLens`), so lens issues carry its codes (`not_in_lens`, …).
+- `Row` and `ValidationIssue` / `ValidationResult` are json-rules' own types, re-exported.
+  `PredicateOptions` is `CheckOptions` with `context` from `CompileOptions` (a `Row`), so one
+  options object serves `check()` and `toPrisma`.
+- `eligible` for a single-path action returns that path's `from` predicate unwrapped
+  (`{ status: … }`, not `{ OR: [{ status: … }] }`); json-rules 3.0 no longer wraps a one-arm
+  OR / AND. An empty action is still `{ OR: [] }` (match-nothing).
+- `prepare` installs lefthook only inside a git checkout.
+
 ## 0.2.0 — predicates evaluate with json-rules' `check()` options
 
 - `checkTransition`, `checkPath` and `available` take json-rules' own `check()` options —

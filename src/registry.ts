@@ -1,4 +1,4 @@
-import { check as checkRule, resolveBindings, toPrisma } from '@inixiative/json-rules';
+import { bindRule, check as checkRule, toPrisma } from '@inixiative/json-rules';
 import { checkPath } from './check';
 import type {
   Action,
@@ -75,8 +75,9 @@ export const available = (
 };
 
 /**
- * Set query: one OR'd Prisma `where` matching every record currently eligible for `action`
- * (the union of all its paths' `from` predicates). Empty action → match-nothing. Takes the same
+ * Set query: one Prisma `where` matching every record currently eligible for `action` (the
+ * union of all its paths' `from` predicates; a single path compiles to its predicate alone).
+ * Empty action → match-nothing. Takes the same
  * json-rules `check()` options: `bindings` are resolved into the predicate before compiling, and
  * `now` / `context` reach `toPrisma`, so the set query selects the rows the single check accepts.
  * A guard toPrisma cannot express (a `$.` row ref in an offset or magnitude) throws.
@@ -89,10 +90,7 @@ export const eligible = (
 ): Row => {
   const found = getAction(rules, resource, action);
   const { bindings = {}, ...compile } = options;
-  const predicate = resolveBindings(
-    { any: found.paths.map((path) => path.from.predicate) },
-    bindings,
-  );
+  const predicate = bindRule({ any: found.paths.map((path) => path.from.predicate) }, bindings);
   // toPrisma always terminates a plan in a WhereStep (and throws on count-based ops,
   // which would need a multi-step plan, since we pass no map/model). Trust that contract.
   const { steps } = toPrisma(predicate, compile);

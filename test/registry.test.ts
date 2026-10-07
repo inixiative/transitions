@@ -183,10 +183,8 @@ describe('available — from-side only', () => {
 });
 
 describe('eligible — set query via toPrisma', () => {
-  test('single-path action → OR of one from predicate', () => {
-    expect(eligible(map, 'inquiry', 'approve')).toEqual({
-      OR: [{ status: { equals: 'pending' } }],
-    });
+  test('single-path action → its from predicate (json-rules 3 unwraps a one-arm OR)', () => {
+    expect(eligible(map, 'inquiry', 'approve')).toEqual({ status: { equals: 'pending' } });
   });
 
   test('multi-path action → OR of all from predicates', () => {
@@ -223,9 +221,7 @@ describe('map-qualified resource keys', () => {
       ),
     ).toBe(true);
     expect(available(qualified, 'db:Inquiry', { status: 'pending' })).toEqual(['approve']);
-    expect(eligible(qualified, 'db:Inquiry', 'approve')).toEqual({
-      OR: [{ status: { equals: 'pending' } }],
-    });
+    expect(eligible(qualified, 'db:Inquiry', 'approve')).toEqual({ status: { equals: 'pending' } });
     expect(() =>
       checkTransition(qualified, 'db:Unknown', 'approve', { status: 'pending' }),
     ).toThrow(/on resource "db:Unknown"/);
