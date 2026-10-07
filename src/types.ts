@@ -1,4 +1,4 @@
-import type { Condition } from '@inixiative/json-rules';
+import type { CheckOptions, Condition } from '@inixiative/json-rules';
 import type { ActionRule } from '@inixiative/permissions';
 
 export type Row = Record<string, unknown>;
@@ -95,3 +95,14 @@ export type AuthorizeOptions = {
   actor?: Actor;
   authorize?: Authorize;
 };
+
+/**
+ * json-rules' own `check()` options — `now` / `timeZone` / `weekStart` for relative dates,
+ * `bindings` for `{ bind }` tokens, `context` for bare paths — with `context` a row, since a
+ * transition's predicates read rows. Both predicates get them, and {@link eligible} compiles
+ * with them.
+ */
+export type PredicateOptions = Omit<CheckOptions, 'context'> & { context?: Row };
+
+/** A transition check: who acts, and what its predicates evaluate with. */
+export type TransitionOptions = AuthorizeOptions & PredicateOptions;
