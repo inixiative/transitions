@@ -108,11 +108,11 @@ describe('a guard that reads its window off the row', () => {
   });
 
   test('eligible refuses a row-read window rather than return the wrong set', () => {
-    expect(() => eligible(selfContained, 'incident', 'autoResolve', { now })).toThrow('toPrisma');
+    expect(() => eligible(selfContained, 'incident', 'autoResolve', { now })).toThrow('Prisma');
   });
 });
 
-describe('context reaches the predicates', () => {
+describe('a bound amount reaches the predicates', () => {
   const contextual: TransitionMap = {
     incident: {
       autoResolve: {
@@ -122,7 +122,7 @@ describe('context reaches the predicates', () => {
               predicate: {
                 field: 'lastBreachedAt',
                 dateOperator: 'before',
-                value: { ago: { seconds: { path: 'quietSeconds' } } },
+                value: { ago: { seconds: { bind: 'quietSeconds' } } },
               },
             },
             to: { predicate: true },
@@ -131,7 +131,7 @@ describe('context reaches the predicates', () => {
       },
     },
   };
-  const options = { now, context: { quietSeconds: 7200 } };
+  const options = { now, bindings: { quietSeconds: 7200 } };
 
   test('checkTransition', () => {
     expect(checkTransition(contextual, 'incident', 'autoResolve', quiet, {}, options)).toBe(true);

@@ -35,7 +35,7 @@ const denies = (
  * `from`/`to` and predicate/permission are independent slots — so a caller sees the whole
  * picture. `from.*` reads the current `record`, `to.*` reads the merged `next` record. Returns
  * `true` when the edge is allowed, else the {@link PathReason}. Omit `authorize` for legality only;
- * json-rules' `check()` options (`now`, `bindings`, `context`, …) reach both predicates.
+ * json-rules' `check()` options (`now`, `bindings`, …) reach both predicates.
  */
 export const checkPath = <R extends Row>(
   transition: Transition<R>,
