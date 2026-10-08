@@ -47,9 +47,16 @@ describe('now and bindings reach the predicates', () => {
 
   test('eligible resolves the bindings and anchors the window on now', () => {
     expect(eligible(map, 'incident', 'autoResolve', evaluation)).toEqual({
-      AND: [
-        { status: { equals: 'firing' } },
-        { lastBreachedAt: { lt: new Date('2026-10-06T10:00:00Z') } },
+      steps: [
+        {
+          operation: 'where',
+          where: {
+            AND: [
+              { status: { equals: 'firing' } },
+              { lastBreachedAt: { lt: new Date('2026-10-06T10:00:00Z') } },
+            ],
+          },
+        },
       ],
     });
   });
@@ -142,7 +149,9 @@ describe('a bound amount reaches the predicates', () => {
 
   test('eligible', () => {
     expect(eligible(contextual, 'incident', 'autoResolve', options)).toEqual({
-      lastBreachedAt: { lt: new Date('2026-10-06T10:00:00Z') },
+      steps: [
+        { operation: 'where', where: { lastBreachedAt: { lt: new Date('2026-10-06T10:00:00Z') } } },
+      ],
     });
   });
 });

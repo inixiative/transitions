@@ -5,13 +5,14 @@ import {
   executePrismaPlan,
   type FieldMap,
   Operator,
+  type ToPrismaResult,
 } from '@inixiative/json-rules';
 import type { TransitionMap } from '../index';
-import { checkTransition, eligible, eligiblePlan } from '../index';
+import { checkTransition, eligible } from '../index';
 
 // A column compared with a column: a review may be approved while it still lacks approvals.
 // check() reads both columns off the row; toPrisma compiles a field reference, which it can only
-// do knowing the model — so eligiblePlan takes the schema (`map`/`mapName`/`model`, or `lens`).
+// do knowing the model — so eligible takes the schema (`map`/`mapName`/`model`, or `lens`).
 const short: Condition = { field: 'approvals', operator: Operator.lessThan, path: 'required' };
 const bareRef: Condition = { field: 'approvals', operator: Operator.lessThan, path: '$.required' };
 
@@ -79,13 +80,13 @@ const rows = [
   { approvals: 0, required: null },
 ];
 
-describe('eligiblePlan compiles column comparisons with the schema', () => {
+describe('eligible compiles column comparisons with the schema', () => {
   test.each([
     ['bare path', short],
     ['$. path', bareRef],
   ])('%s: the plan run through executePrismaPlan selects what check accepts', async (_, predicate) => {
     const rules = rulesFor(predicate);
-    const plan = eligiblePlan(rules, 'review', 'approve', { map, model: 'Review' });
+    const plan = eligible(rules, 'review', 'approve', { map, model: 'Review' });
     const where = await executePrismaPlan(plan, client);
     expect(where).toEqual({ approvals: { lt: { column: 'required' } } });
     expect(select(where, rows)).toEqual(
@@ -95,7 +96,7 @@ describe('eligiblePlan compiles column comparisons with the schema', () => {
   });
 
   test('{ map: FieldMapSet, mapName, model } compiles too', async () => {
-    const plan = eligiblePlan(rulesFor(short), 'review', 'approve', {
+    const plan = eligible(rulesFor(short), 'review', 'approve', {
       map: { maps: { prisma: map } },
       mapName: 'prisma',
       model: 'Review',
@@ -107,8 +108,8 @@ describe('eligiblePlan compiles column comparisons with the schema', () => {
 
   test('{ lens } compiles against the lens root', () => {
     const lens = createLens({ maps: { prisma: map }, mapName: 'prisma', model: 'Review' });
-    expect(eligiblePlan(rulesFor(short), 'review', 'approve', { lens })).toEqual(
-      eligiblePlan(rulesFor(short), 'review', 'approve', { map, model: 'Review' }),
+    expect(eligible(rulesFor(short), 'review', 'approve', { lens })).toEqual(
+      eligible(rulesFor(short), 'review', 'approve', { map, model: 'Review' }),
     );
   });
 
@@ -119,35 +120,22 @@ describe('eligiblePlan compiles column comparisons with the schema', () => {
       count: 2,
       condition: true,
     });
-    expect(eligiblePlan(counted, 'review', 'approve', { map, model: 'Review' }).steps).toHaveLength(
-      2,
-    );
+    expect(eligible(counted, 'review', 'approve', { map, model: 'Review' }).steps).toHaveLength(2);
   });
 
   test('without the schema it refuses rather than return the wrong set', () => {
-    expect(() => eligiblePlan(rulesFor(short), 'review', 'approve')).toThrow('Prisma');
+    expect(() => eligible(rulesFor(short), 'review', 'approve')).toThrow('Prisma');
   });
 });
 
-describe('eligible returns a where only when it stands alone', () => {
-  test('a field ref or a step ref needs the client: eligible points at eligiblePlan', () => {
-    const counted = rulesFor({
-      field: 'votes',
-      arrayOperator: 'atLeast',
-      count: 2,
-      condition: true,
-    });
-    for (const rules of [rulesFor(short), counted])
-      expect(() => eligible(rules, 'review', 'approve', { map, model: 'Review' })).toThrow(
-        'eligiblePlan',
-      );
-  });
-
-  test('a self-contained guard still compiles to its where, schema or not', () => {
+describe('a self-contained guard', () => {
+  test('compiles to a single where step, schema or not', () => {
     const plain = rulesFor({ field: 'approvals', operator: Operator.lessThan, value: 2 });
-    expect(eligible(plain, 'review', 'approve', { map, model: 'Review' })).toEqual({
-      approvals: { lt: 2 },
-    });
+    const expected: ToPrismaResult = {
+      steps: [{ operation: 'where', where: { approvals: { lt: 2 } } }],
+    };
+    expect(eligible(plain, 'review', 'approve', { map, model: 'Review' })).toEqual(expected);
+    expect(eligible(plain, 'review', 'approve')).toEqual(expected);
   });
 });
 
@@ -169,7 +157,7 @@ describe('a bound timeZone reaches eligible', () => {
 
   test('eligible resolves it the same way', () => {
     expect(eligible(rules, 'review', 'approve', options)).toEqual({
-      dueAt: { lt: new Date('2026-10-05T04:00:00Z') },
+      steps: [{ operation: 'where', where: { dueAt: { lt: new Date('2026-10-05T04:00:00Z') } } }],
     });
     expect(eligible(rules, 'review', 'approve', options)).not.toEqual(
       eligible(rules, 'review', 'approve', { now }),
