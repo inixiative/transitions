@@ -140,9 +140,9 @@ eligible(rules, 'db:Inquiry', 'approve');
 ```
 
 A predicate evaluates with the same options json-rules' `check()` takes — `now`, `timeZone`,
-`weekStart`, `bindings`, `context` — passed beside `actor` / `authorize`. `checkTransition`,
+`weekStart`, `bindings` — passed beside `actor` / `authorize`. `checkTransition`,
 `checkPath` and `available` give them to both sides; `eligible` resolves the bindings into the
-predicate and compiles with `now` / `context`, so the set query selects exactly the records the
+predicate and compiles with `now`, so the set query selects exactly the records the
 single check accepts:
 
 ```ts

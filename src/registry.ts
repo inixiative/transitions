@@ -79,7 +79,7 @@ export const available = (
  * union of all its paths' `from` predicates; a single path compiles to its predicate alone).
  * Empty action → match-nothing. Takes the same
  * json-rules `check()` options: `bindings` are resolved into the predicate before compiling, and
- * `now` / `context` reach `toPrisma`, so the set query selects the rows the single check accepts.
+ * `now` reaches `toPrisma`, so the set query selects the rows the single check accepts.
  * A guard toPrisma cannot express (a `$.` row ref in an offset or magnitude) throws.
  */
 export const eligible = (

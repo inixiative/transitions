@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0
+
+- json-rules 3.4: `PredicateOptions` is json-rules' `CheckOptions` — `context` is gone (caller values
+  are binds: pass them in `bindings`); a bare `path` reads a column of the record.
+
 ## 0.3.0 — json-rules 3.0, permissions 0.4.0
 
 - **Requires `@inixiative/json-rules@^3.0.0` and `@inixiative/permissions@^0.4.0`.** Predicates

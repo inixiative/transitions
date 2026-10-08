@@ -1,4 +1,4 @@
-import type { CheckOptions, CompileOptions, Condition, Row } from '@inixiative/json-rules';
+import type { CheckOptions, Condition, Row } from '@inixiative/json-rules';
 import type { ActionRule } from '@inixiative/permissions';
 
 /**
@@ -96,10 +96,10 @@ export type AuthorizeOptions = {
 
 /**
  * json-rules' own `check()` options — `now` / `timeZone` / `weekStart` for relative dates,
- * `bindings` for `{ bind }` tokens — with `context` the compilers' (a {@link Row}), so the same
- * options serve `check()` and {@link eligible}'s `toPrisma`.
+ * `bindings` for `{ bind }` tokens (caller values are binds) — so the same options serve `check()`
+ * and {@link eligible}'s `toPrisma`.
  */
-export type PredicateOptions = Omit<CheckOptions, 'context'> & Pick<CompileOptions, 'context'>;
+export type PredicateOptions = CheckOptions;
 
 /** A transition check: who acts, and what its predicates evaluate with. */
 export type TransitionOptions = AuthorizeOptions & PredicateOptions;
