@@ -5,7 +5,7 @@ that answers two questions about an entity's lifecycle, declaratively:
 
 - **"Can this change happen?"** — guard a proposed update (`checkTransition`).
 - **"What changes can happen?"** — list available actions for a record (`available`), and via
-  `toPrisma`, every record currently eligible for an action (`eligible`).
+  `toPrisma`, every record currently eligible for an action (`eligible` / `eligiblePlan`).
 
 It is **not** a state machine (no statecharts/actors/hierarchy), does **not** own state, and does
 **not** execute the change or run side effects. It is a guard + affordance layer. A transition is
@@ -130,7 +130,7 @@ cleanly.
 ## Affordance + set query
 
 ```ts
-import { available, eligible } from '@inixiative/transitions';
+import { available, eligible, eligiblePlan } from '@inixiative/transitions';
 
 available(rules, 'db:Inquiry', record, { actor, authorize });
 // → ['approve', 'reject', 'cancel']   (from-side only — `to` needs proposed changes, so it defers to checkTransition)
@@ -142,8 +142,8 @@ eligible(rules, 'db:Inquiry', 'approve');
 A predicate evaluates with the same options json-rules' `check()` takes — `now`, `timeZone`,
 `weekStart`, `bindings` — passed beside `actor` / `authorize`. `checkTransition`,
 `checkPath` and `available` give them to both sides; `eligible` resolves the bindings into the
-predicate and compiles with `now`, so the set query selects exactly the records the
-single check accepts:
+predicate (and into a `{ bind }` `timeZone`) and compiles with `now`, so the set query selects
+exactly the records the single check accepts:
 
 ```ts
 const quietFor = { field: 'lastBreachedAt', dateOperator: 'before', bind: 'quietWindow' };
@@ -163,6 +163,24 @@ A guard can read its window off the record instead — self-contained, nothing t
 
 `check()` evaluates it per record; `eligible` throws on it, since a Prisma `where` can't do
 arithmetic on a column — it never returns the wrong set.
+
+A guard that compares a column with a column (`{ field: 'approvals', operator: 'lessThan', path:
+'required' }`) or counts a relation needs the schema to compile, and the client to run: pass
+toPrisma's `map` / `mapName` / `model`, or a `lens` (compiled narrowed by it, against its base
+lens), to `eligiblePlan`, and run the plan with json-rules' `executePrismaPlan`, which resolves
+its field and step references:
+
+```ts
+import { executePrismaPlan } from '@inixiative/json-rules';
+import { eligiblePlan } from '@inixiative/transitions';
+
+const plan = eligiblePlan(rules, 'db:Review', 'approve', { map, model: 'Review', now });
+const where = await executePrismaPlan(plan, prisma);
+// → { approvals: { lt: prisma.review.fields.required } }
+```
+
+`eligible` returns the `where` only when it stands alone; on a plan with references it throws
+and points at `eligiblePlan`. Without the schema, a column comparison throws on both.
 
 ## Merge strategies
 

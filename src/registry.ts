@@ -1,11 +1,20 @@
-import { bindRule, check as checkRule, toPrisma } from '@inixiative/json-rules';
+import {
+  bindRule,
+  type Condition,
+  check as checkRule,
+  Operator,
+  type RuleValue,
+  type TimeZoneConfig,
+  type ToPrismaResult,
+  toPrisma,
+} from '@inixiative/json-rules';
 import { checkPath } from './check';
 import type {
   Action,
   ActionRule,
   CheckResult,
+  EligibleOptions,
   PathReason,
-  PredicateOptions,
   Row,
   TransitionMap,
   TransitionOptions,
@@ -74,25 +83,57 @@ export const available = (
     .map(([action]) => action);
 };
 
+// A `{ bind }` zone, resolved the way the rule's own tokens are: json-rules' bindRule over a
+// carrier leaf. An uncovered token stays a token, and toPrisma reports it unresolved.
+const bindTimeZone = (
+  timeZone: TimeZoneConfig | undefined,
+  bindings: Record<string, RuleValue>,
+): TimeZoneConfig | undefined => {
+  if (timeZone === undefined || typeof timeZone === 'string') return timeZone;
+  const carrier = { field: 'timeZone', operator: Operator.equals, ...timeZone } as Condition;
+  const { field: _field, operator: _operator, ...source } = bindRule(carrier, bindings) as Row;
+  return source as TimeZoneConfig;
+};
+
 /**
- * Set query: one Prisma `where` matching every record currently eligible for `action` (the
- * union of all its paths' `from` predicates; a single path compiles to its predicate alone).
- * Empty action → match-nothing. Takes the same
- * json-rules `check()` options: `bindings` are resolved into the predicate before compiling, and
- * `now` reaches `toPrisma`, so the set query selects the rows the single check accepts.
- * A guard toPrisma cannot express (a `$.` row ref in an offset or magnitude) throws.
+ * Set query as a json-rules Prisma plan: every record currently eligible for `action` (the union
+ * of all its paths' `from` predicates; a single path compiles to its predicate alone; an empty
+ * action matches nothing). Takes the json-rules `check()` options plus toPrisma's schema:
+ * `bindings` are resolved into the predicate and a `{ bind }` timeZone before compiling, `now`
+ * reaches `toPrisma`, and `map` / `mapName` / `model` (or `lens`) let it compile a column
+ * compared with a column or a count. Run it with json-rules' `executePrismaPlan(plan, prisma)`,
+ * which resolves the plan's references, and the `where` selects the rows the single check
+ * accepts. A guard toPrisma cannot express (a `$.` row ref in an offset or magnitude, a column
+ * ref without the schema) throws.
+ */
+export const eligiblePlan = (
+  rules: TransitionMap,
+  resource: string,
+  action: string,
+  options: EligibleOptions = {},
+): ToPrismaResult => {
+  const found = getAction(rules, resource, action);
+  const { bindings = {}, timeZone, ...compile } = options;
+  const predicate = bindRule({ any: found.paths.map((path) => path.from.predicate) }, bindings);
+  return toPrisma(predicate, { ...compile, timeZone: bindTimeZone(timeZone, bindings) });
+};
+
+/**
+ * Set query: {@link eligiblePlan}'s `where`, when it stands alone. A plan holding references —
+ * a column compared with a column (a Prisma field ref) or a count (a groupBy step) — needs the
+ * client to resolve, so `eligible` throws on it; use `eligiblePlan` with `executePrismaPlan`.
  */
 export const eligible = (
   rules: TransitionMap,
   resource: string,
   action: string,
-  options: PredicateOptions = {},
+  options: EligibleOptions = {},
 ): Row => {
-  const found = getAction(rules, resource, action);
-  const { bindings = {}, ...compile } = options;
-  const predicate = bindRule({ any: found.paths.map((path) => path.from.predicate) }, bindings);
-  // toPrisma always terminates a plan in a WhereStep (and throws on count-based ops,
-  // which would need a multi-step plan, since we pass no map/model). Trust that contract.
-  const { steps } = toPrisma(predicate, compile);
-  return (steps[steps.length - 1] as { where: Row }).where;
+  const { steps } = eligiblePlan(rules, resource, action, options);
+  const [step] = steps;
+  if (steps.length !== 1 || step?.operation !== 'where' || step.refs?.length)
+    throw new Error(
+      `transition: "${action}" on "${resource}" compiles to a plan with references (a column compared with a column, or a count); run eligiblePlan with executePrismaPlan`,
+    );
+  return step.where;
 };
