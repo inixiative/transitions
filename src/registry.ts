@@ -106,7 +106,7 @@ const bindTimeZone = (
  * accepts. A guard toPrisma cannot express (a `$.` row ref in an offset or magnitude, a column
  * ref without the schema) throws.
  */
-export const eligiblePlan = (
+export const eligible = (
   rules: TransitionMap,
   resource: string,
   action: string,
@@ -116,24 +116,4 @@ export const eligiblePlan = (
   const { bindings = {}, timeZone, ...compile } = options;
   const predicate = bindRule({ any: found.paths.map((path) => path.from.predicate) }, bindings);
   return toPrisma(predicate, { ...compile, timeZone: bindTimeZone(timeZone, bindings) });
-};
-
-/**
- * Set query: {@link eligiblePlan}'s `where`, when it stands alone. A plan holding references —
- * a column compared with a column (a Prisma field ref) or a count (a groupBy step) — needs the
- * client to resolve, so `eligible` throws on it; use `eligiblePlan` with `executePrismaPlan`.
- */
-export const eligible = (
-  rules: TransitionMap,
-  resource: string,
-  action: string,
-  options: EligibleOptions = {},
-): Row => {
-  const { steps } = eligiblePlan(rules, resource, action, options);
-  const [step] = steps;
-  if (steps.length !== 1 || step?.operation !== 'where' || step.refs?.length)
-    throw new Error(
-      `transition: "${action}" on "${resource}" compiles to a plan with references (a column compared with a column, or a count); run eligiblePlan with executePrismaPlan`,
-    );
-  return step.where;
 };

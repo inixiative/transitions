@@ -2,18 +2,18 @@
 
 ## 0.5.0
 
-- **`eligiblePlan(rules, resource, action, options)`** returns the set query as json-rules' Prisma
-  plan. Its options (`EligibleOptions = PredicateOptions & ToPrismaOptions`) take toPrisma's
-  schema beside the predicate options: `map` / `mapName` / `model`, or a `lens`. A
-  from-predicate comparing a column with a column (`{ field: 'approvals', operator: 'lessThan',
-  path: 'required' }`), which `checkTransition` accepts, now compiles to a Prisma field
-  reference; a count compiles to its groupBy steps. Run the plan with `executePrismaPlan(plan,
-  prisma)`; the `where` selects the rows the single check accepts.
-- `eligible` takes the same options and returns the plan's `where` when it stands alone. On a
-  plan with references (a field ref or a step ref) it throws and points at `eligiblePlan`;
-  before, a column comparison threw for want of the schema, and nothing stopped a dangling ref.
-- `eligible` / `eligiblePlan` resolve a `{ bind }` `timeZone` from `bindings` (through
-  json-rules' `bindRule`), as `check()` does; before, they threw "Unresolved binding".
+- **`eligible(rules, resource, action, options)` returns json-rules' Prisma plan** (`toPrisma`'s
+  `ToPrismaResult`), not a `where`. Run it with `executePrismaPlan(plan, prisma)`; the resolved
+  `where` selects the rows the single check accepts. Its options (`EligibleOptions =
+  PredicateOptions & ToPrismaOptions`) take toPrisma's schema beside the predicate options: `map`
+  / `mapName` / `model`, or a `lens`. A from-predicate comparing a column with a column (`{ field:
+  'approvals', operator: 'lessThan', path: 'required' }`), which `checkTransition` accepts, now
+  compiles to a Prisma field reference; a count compiles to its groupBy steps. Before, a column
+  comparison threw for want of the schema. Callers that read `eligible(...)` as a `where` move to
+  `(await executePrismaPlan(eligible(...), prisma))`; there is no second, where-returning
+  function.
+- `eligible` resolves a `{ bind }` `timeZone` from `bindings` (through json-rules' `bindRule`), as
+  `check()` does; before, it threw "Unresolved binding".
 
 ## 0.4.0
 
