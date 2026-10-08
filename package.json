@@ -1,6 +1,6 @@
 {
   "name": "@inixiative/transitions",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Declarative, serializable transition guard + affordance layer on top of @inixiative/json-rules",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",

@@ -1,4 +1,4 @@
-import type { CheckOptions, Condition, Row } from '@inixiative/json-rules';
+import type { CheckOptions, Condition, Row, ToPrismaOptions } from '@inixiative/json-rules';
 import type { ActionRule } from '@inixiative/permissions';
 
 /**
@@ -103,3 +103,9 @@ export type PredicateOptions = CheckOptions;
 
 /** A transition check: who acts, and what its predicates evaluate with. */
 export type TransitionOptions = AuthorizeOptions & PredicateOptions;
+
+/**
+ * {@link eligible}'s options: the predicate options plus toPrisma's schema — `map` / `mapName` /
+ * `model`, or a `lens` (not both) — which a column comparison needs to compile.
+ */
+export type EligibleOptions = PredicateOptions & ToPrismaOptions;
