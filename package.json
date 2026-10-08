@@ -41,7 +41,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.2",
-    "@inixiative/config": "^0.5.51",
+    "@inixiative/config": "^0.5.56",
     "@types/bun": "1.4.2",
     "@types/lodash-es": "^4.17.12",
     "lefthook": "2.1.9",
@@ -57,7 +57,7 @@
     }
   },
   "dependencies": {
-    "@inixiative/json-rules": "^3.0.0",
+    "@inixiative/json-rules": "^3.3.0",
     "@inixiative/permissions": "^0.4.0",
     "lodash-es": "^4.18.1",
     "zod": "^4.4.3"
