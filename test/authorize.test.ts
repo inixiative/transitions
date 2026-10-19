@@ -15,16 +15,18 @@ const schema: RebacSchema = {
         read: 'manage',
       },
     },
+    // the actor's own entry: a self arm needs `operate` there
+    user: { actions: { operate: true } },
     membership: {
       actions: {
-        leave: { self: 'userId' },
+        leave: { self: 'userId', action: 'operate' },
         manage: { rel: 'organization', action: 'manage' },
       },
     },
   },
 };
 
-const authorizeFor = createAuthorize({ schema });
+const authorizeFor = createAuthorize({ schema, selfResource: 'user' });
 
 describe('permissions adapter (createAuthorize)', () => {
   test('abac { rule } leaf', () => {
@@ -50,7 +52,23 @@ describe('permissions adapter (createAuthorize)', () => {
     expect(authorize(false, {}, null)).toBe(false);
   });
 
-  test('{ self } matches the actor id', () => {
+  test('{ actor } reads the actor itself', () => {
+    const authorize = authorizeFor('organization');
+    const reviewer = { actor: { field: 'kind', operator: Operator.equals, value: 'reviewer' } };
+    expect(authorize(reviewer, {}, { id: 'u1', kind: 'reviewer' })).toBe(true);
+    expect(authorize(reviewer, {}, { id: 'u1', kind: 'person' })).toBe(false);
+    expect(authorize(reviewer, {}, null)).toBe(false);
+  });
+
+  test('{ self, action } needs the action on the actor itself', () => {
+    const narrowed: RebacSchema = { permissions: { user: { actions: { operate: false } } } };
+    const authorize = createAuthorize({ schema: narrowed, selfResource: 'user' })('membership');
+    expect(authorize({ self: 'userId', action: 'operate' }, { userId: 'u1' }, { id: 'u1' })).toBe(
+      false,
+    );
+  });
+
+  test('{ self, action } matches the actor id', () => {
     const authorize = authorizeFor('membership');
     expect(authorize('leave', { userId: 'u1' }, { id: 'u1' })).toBe(true);
     expect(authorize('leave', { userId: 'u2' }, { id: 'u1' })).toBe(false);

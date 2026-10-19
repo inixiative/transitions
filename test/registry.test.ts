@@ -32,7 +32,10 @@ const map: TransitionMap = {
     cancel: {
       paths: [
         {
-          from: { predicate: eq('status', 'pending'), permission: { self: 'sourceUserId' } },
+          from: {
+            predicate: eq('status', 'pending'),
+            permission: { self: 'sourceUserId', action: 'operate' },
+          },
           to: { predicate: eq('status', 'cancelled') },
         },
       ],

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.0 — permissions 0.5.0
+
+- **Requires `@inixiative/permissions@^0.5.0`.** A self arm names the action the actor must hold on itself (`{ self: 'userId', action: 'operate' }`); pass `createAuthorize({ schema, selfResource })` naming the resource that holds the actor's own entry. A bare `{ self }` throws.
+- The actor is passed through as permissions' actor: its id for `{ self }`, its other flat fields for `{ actor: Condition }` and `{ bind: 'actor.<field>' }` in `{ rule }`.
+
 ## 0.5.0
 
 - **`eligible(rules, resource, action, options)` returns json-rules' Prisma plan** (`toPrisma`'s

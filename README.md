@@ -81,13 +81,13 @@ else every path's `PathReason`.
 
 The kernel never imports an authorization library. Per-side `permission` is a serializable
 `ActionRule` re-exported straight from [`@inixiative/permissions`](https://github.com/inixiative/permissions)
-(`string` delegation, `{ rel, action }`, `{ self }`, abac `{ rule }`, `any`/`all`, boolean terminals
+(`string` delegation, `{ rel, action }`, `{ self, action }`, `{ actor }`, abac `{ rule }`, `any`/`all`, boolean terminals
 `true`/`false`, `null`), and you inject an `authorize` callback to evaluate it:
 
 ```ts
 import { checkTransition, createAuthorize } from '@inixiative/transitions';
 
-const authorize = createAuthorize({ schema: rebacSchema })('db:Inquiry');
+const authorize = createAuthorize({ schema: rebacSchema, selfResource: 'db:User' })('db:Inquiry');
 checkTransition(rules, 'db:Inquiry', 'approve', record, changes, { actor, authorize });
 ```
 
@@ -106,7 +106,7 @@ Authorization is **not** reimplemented here. `createAuthorize` is a thin adapter
 `@inixiative/permissions`' production rebac `check` onto the `Authorize` seam:
 `createAuthorize(options)(resource)` returns an `Authorize` bound to a (map-qualified) `resource`.
 permissions owns the whole evaluation — `string` delegation with **cycle detection**, intra-map `rel`
-walks (via an injected `resolveRelation`), cross-map bridge walks, `{ self }`, abac `{ rule }`, boolean
+walks (via an injected `resolveRelation`), cross-map bridge walks, `{ self, action }`, `{ actor }`, abac `{ rule }`, boolean
 terminals, `any`/`all`, and per-row `permissionRules` overrides. It speaks the same map-qualified
 `resource` keys as this package.
 
@@ -118,11 +118,12 @@ const schema: RebacSchema = { permissions: { 'db:Inquiry': { actions: { /* … *
 const authorize = createAuthorize({
   schema,
   resolveRelation, // optional; default: the relation segment name is the resource key
+  selfResource: 'db:User', // where a `{ self, action }` arm checks the actor's own action
   isSuperadmin,    // optional; derived from the actor
 })('db:Inquiry');
 ```
 
-`options`: `schema` (permissions' `{ bridges?, permissions }`), optional `resolveRelation`,
+`options`: `schema` (permissions' `{ bridges?, permissions }`), `selfResource` (needed by any self arm), optional `resolveRelation`,
 `isSuperadmin`, and `data` (supplemental hydrated rows for bridge walks). A cyclic permission graph —
 which permissions surfaces by throwing — is caught and denied (fail closed), so the guard terminates
 cleanly.

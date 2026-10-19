@@ -6,7 +6,7 @@ import { validateTransition } from '../index';
 const valid: Transition = {
   from: {
     predicate: { field: 'status', operator: Operator.equals, value: 'pending' },
-    permission: { all: ['resolve', { self: 'userId' }] },
+    permission: { all: ['resolve', { self: 'userId', action: 'operate' }] },
   },
   to: {
     predicate: { field: 'status', operator: Operator.equals, value: 'approved' },
