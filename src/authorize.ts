@@ -1,6 +1,7 @@
 import {
   type ActionRule,
   createRebacCheck,
+  type Actor as LibraryActor,
   type PermixLike,
   type RebacSchema,
   type ResolveRelation,
@@ -24,6 +25,12 @@ export type PermissionsAuthorizeOptions<R extends string = string> = {
   /** Superadmin bypass, derived from the actor; checked before any rule. */
   isSuperadmin?: (actor: Actor) => boolean;
   /**
+   * The resource holding the actor's own entry, e.g. `'user'`. A `{ self, action }` arm passes when
+   * `record[self]` is the actor's id AND `action` holds on that resource's record `{ id }` through
+   * the schema. Required by any schema that uses a self arm; evaluating one without it throws.
+   */
+  selfResource?: R;
+  /**
    * Supplemental hydrated rows (`map:model → rows`) for bridge (cross-map) `rel` walks, derived from
    * the record + actor — the same shape `Subject.data` takes. Only consulted when a walk crosses a
    * bridge and a downstream action reads the far record's fields.
@@ -32,12 +39,13 @@ export type PermissionsAuthorizeOptions<R extends string = string> = {
 };
 
 // The transitions seam carries no pre-granted (role-derived) permix state, so a direct permix grant
-// always misses and authorization is decided entirely by the schema. The actor supplies only its id
-// (for `{ self }`) and an optional superadmin bypass.
+// always misses and authorization is decided entirely by the schema. The actor is handed through
+// as it is (its id for `{ self }`, its fields for `{ actor }` arms and `actor.<field>` binds); an
+// actor without an id is nobody acting.
 const actorPermix = (actor: Actor, isSuperadmin?: (actor: Actor) => boolean): PermixLike => ({
   check: () => false,
   isSuperadmin: () => isSuperadmin?.(actor) ?? false,
-  getUserId: () => actor?.id ?? null,
+  getActor: () => (actor?.id ? ({ ...actor, id: String(actor.id) } as LibraryActor) : null),
 });
 
 /**
@@ -45,15 +53,16 @@ const actorPermix = (actor: Actor, isSuperadmin?: (actor: Actor) => boolean): Pe
  * production evaluator, injected, not reimplemented. `createAuthorize(options)(resource)` returns an
  * `Authorize` bound to a (map-qualified) `resource`; each call evaluates a per-side `permission`
  * rule against a concrete record + actor. permissions owns the evaluation (string delegation with
- * cycle detection, intra-map `rel` walks via `resolveRelation`, cross-map bridge walks, `{ self }`,
- * abac `{ rule }`, boolean terminals, `any`/`all`, per-row `permissionRules` overrides).
+ * cycle detection, intra-map `rel` walks via `resolveRelation`, cross-map bridge walks,
+ * `{ self, action }` against `selfResource`, abac `{ rule }` and `{ actor }`, boolean terminals,
+ * `any`/`all`, per-row `permissionRules` overrides).
  */
 export const createAuthorize = <R extends string = string>(
   options: PermissionsAuthorizeOptions<R>,
 ): ((resource: R) => Authorize) => {
   const resolveRelation: ResolveRelation<R> =
     options.resolveRelation ?? ((_resource, segment) => segment as R);
-  const check = createRebacCheck<R>(resolveRelation);
+  const check = createRebacCheck<R>(resolveRelation, { selfResource: options.selfResource });
 
   return (resource: R): Authorize =>
     (rule, record, actor) => {

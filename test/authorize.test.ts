@@ -17,14 +17,17 @@ const schema: RebacSchema = {
     },
     membership: {
       actions: {
-        leave: { self: 'userId' },
+        leave: { self: 'userId', action: 'operate' },
         manage: { rel: 'organization', action: 'manage' },
       },
     },
+    // the actor's own entry: with no role-derived grants in this seam, the schema says what an
+    // actor may do as itself
+    user: { actions: { operate: true } },
   },
 };
 
-const authorizeFor = createAuthorize({ schema });
+const authorizeFor = createAuthorize<string>({ schema, selfResource: 'user' });
 
 describe('permissions adapter (createAuthorize)', () => {
   test('abac { rule } leaf', () => {
@@ -50,11 +53,31 @@ describe('permissions adapter (createAuthorize)', () => {
     expect(authorize(false, {}, null)).toBe(false);
   });
 
-  test('{ self } matches the actor id', () => {
+  test('{ self, action } matches the actor id and holds the action on its own entry', () => {
     const authorize = authorizeFor('membership');
     expect(authorize('leave', { userId: 'u1' }, { id: 'u1' })).toBe(true);
     expect(authorize('leave', { userId: 'u2' }, { id: 'u1' })).toBe(false);
     expect(authorize('leave', { userId: 'u1' }, null)).toBe(false);
+    expect(authorize('leave', { userId: 'u1' }, { id: null })).toBe(false);
+  });
+
+  test('a self arm without a selfResource is a configuration error, not a deny', () => {
+    const authorize = createAuthorize({ schema })('membership');
+    expect(() => authorize('leave', { userId: 'u1' }, { id: 'u1' })).toThrow(/selfResource/);
+  });
+
+  test('{ actor } reads the actor as it was handed in', () => {
+    const s: RebacSchema = {
+      permissions: {
+        m: {
+          actions: { go: { actor: { field: 'kind', operator: Operator.equals, value: 'person' } } },
+        },
+      },
+    };
+    const authorize = createAuthorize({ schema: s })('m');
+    expect(authorize('go', {}, { id: 'u1', kind: 'person' })).toBe(true);
+    expect(authorize('go', {}, { id: 't1', kind: 'token' })).toBe(false);
+    expect(authorize('go', {}, null)).toBe(false);
   });
 
   test('{ rel, action } walks the relation (default resolver: segment = resource)', () => {

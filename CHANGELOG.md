@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1
+
+- **Requires `@inixiative/permissions@^0.6.0`** (and `@inixiative/json-rules@^3.6.0`). The adapter speaks the 0.5+ contract: the actor is handed through whole (`getActor`), so `{ actor }` arms and `actor.<field>` binds read the fields you pass; an actor without an id is nobody acting.
+- **`createAuthorize` takes `selfResource`.** A self arm is `{ self, action }`: it passes when `record[self]` is the actor's id and `action` holds on `selfResource`'s record `{ id }` through the schema. A bare `{ self }` no longer typechecks or validates, and a self arm evaluated without `selfResource` throws (a configuration error, not a deny).
+
 ## 0.5.0
 
 - **`eligible(rules, resource, action, options)` returns json-rules' Prisma plan** (`toPrisma`'s

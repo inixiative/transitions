@@ -81,7 +81,7 @@ else every path's `PathReason`.
 
 The kernel never imports an authorization library. Per-side `permission` is a serializable
 `ActionRule` re-exported straight from [`@inixiative/permissions`](https://github.com/inixiative/permissions)
-(`string` delegation, `{ rel, action }`, `{ self }`, abac `{ rule }`, `any`/`all`, boolean terminals
+(`string` delegation, `{ rel, action }`, `{ self, action }`, abac `{ rule }` and `{ actor }`, `any`/`all`, boolean terminals
 `true`/`false`, `null`), and you inject an `authorize` callback to evaluate it:
 
 ```ts
@@ -106,8 +106,9 @@ Authorization is **not** reimplemented here. `createAuthorize` is a thin adapter
 `@inixiative/permissions`' production rebac `check` onto the `Authorize` seam:
 `createAuthorize(options)(resource)` returns an `Authorize` bound to a (map-qualified) `resource`.
 permissions owns the whole evaluation — `string` delegation with **cycle detection**, intra-map `rel`
-walks (via an injected `resolveRelation`), cross-map bridge walks, `{ self }`, abac `{ rule }`, boolean
-terminals, `any`/`all`, and per-row `permissionRules` overrides. It speaks the same map-qualified
+walks (via an injected `resolveRelation`), cross-map bridge walks, `{ self, action }` against the
+`selfResource`, abac `{ rule }` and `{ actor }`, boolean terminals, `any`/`all`, and per-row
+`permissionRules` overrides. It speaks the same map-qualified
 `resource` keys as this package.
 
 ```ts
@@ -119,10 +120,11 @@ const authorize = createAuthorize({
   schema,
   resolveRelation, // optional; default: the relation segment name is the resource key
   isSuperadmin,    // optional; derived from the actor
+  selfResource: 'db:User', // required by any schema with a { self, action } arm
 })('db:Inquiry');
 ```
 
-`options`: `schema` (permissions' `{ bridges?, permissions }`), optional `resolveRelation`,
+`options`: `schema` (permissions' `{ bridges?, permissions }`), optional `resolveRelation`, `selfResource`,
 `isSuperadmin`, and `data` (supplemental hydrated rows for bridge walks). A cyclic permission graph —
 which permissions surfaces by throwing — is caught and denied (fail closed), so the guard terminates
 cleanly.
