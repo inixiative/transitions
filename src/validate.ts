@@ -7,7 +7,7 @@ import {
   validateRule,
   validateRuleInLens,
 } from '@inixiative/json-rules';
-import { actionRuleSchema } from '@inixiative/permissions/actionRuleSchema';
+import { validateActionRule } from '@inixiative/permissions';
 import { isSerializableMerge } from './merge';
 import type { ActionRule, Merge, Side, ToSide, Transition } from './types';
 
@@ -40,30 +40,14 @@ const validatePredicate = (
   for (const issue of issues) errors.push({ ...issue, path: `${path}.${issue.path}` });
 };
 
-// Validate the whole ActionRule against `@inixiative/permissions`' zod schema — the single source of
-// truth for the algebra (boolean terminals, string delegation, `{ rel, action }`, `{ self }`, abac
-// `{ rule }`, `any`/`all`, `null`). A malformed rule yields a structured issue rather than throwing.
 const validatePermission = (
   rule: ActionRule | undefined,
   errors: ValidationIssue[],
   path: string,
 ): void => {
-  if (rule === undefined) return; // absent = open
-  const parsed = actionRuleSchema.safeParse(rule);
-  if (parsed.success) return;
-  for (const issue of parsed.error.issues) {
-    // A root union failure (zod reports an empty relative path) means none of the ActionRule shapes
-    // matched; nested issues keep their zod path + message.
-    if (issue.path.length === 0) {
-      errors.push({ path, message: 'unrecognized ActionRule shape', code: 'invalid_permission' });
-    } else {
-      errors.push({
-        path: `${path}.${issue.path.join('.')}`,
-        message: issue.message,
-        code: 'invalid_permission',
-      });
-    }
-  }
+  if (rule === undefined) return;
+  for (const issue of validateActionRule(rule).errors)
+    errors.push({ ...issue, path: `${path}${issue.path.slice(1)}`, code: 'invalid_permission' });
 };
 
 const validateMerge = (merge: Merge | undefined, errors: ValidationIssue[], path: string): void => {
@@ -108,7 +92,7 @@ const validateSide = (
  * Authoring validation for a single transition — run on save before persisting a tenant config.
  * Returns structured issues (never throws) on malformed input: predicate validity delegates to
  * json-rules (`validateRule`, plus `validateRuleInLens` when a `lens` is supplied for
- * field/relation scoping); permission shape delegates to `@inixiative/permissions`' `actionRuleSchema`;
+ * field/relation scoping); permission shape delegates to `@inixiative/permissions`' `validateActionRule`;
  * merge strategy is checked here.
  */
 export const validateTransition = (

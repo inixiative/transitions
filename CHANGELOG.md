@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0
+
+- **Requires `@inixiative/permissions@^0.12.1`.**
+- **Breaking: `createAuthorize` takes `map`**, permissions' `SchemaMap` (`{ resources, fieldMap, polymorphism? }`): a `{ rel }` walk follows the relation the map names. `resolveRelation` and `selfResource` are gone.
+- **Breaking: the actor is permissions' `{ model, record }`**, read in a `{ rule }` as `__actor` (`__actor.model`, `__actor.record.id`). The `{ self }` and `{ actor }` arms are gone: acting as yourself is a walk to your own entry (`{ rel: 'user', action }` on a row hydrated with its `user`), and a row without the relation loaded is denied.
+- **Breaking: `validateTransition` checks a permission with `validateActionRule`**: every `{ rule }` is a positive json-rules condition, so a negation is an `invalid_permission` issue. An unrecognized shape reads `not an action rule`.
+
 ## 0.5.0
 
 - **`eligible(rules, resource, action, options)` returns json-rules' Prisma plan** (`toPrisma`'s

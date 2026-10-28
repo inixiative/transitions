@@ -6,7 +6,7 @@ import { validateTransition } from '../index';
 const valid: Transition = {
   from: {
     predicate: { field: 'status', operator: Operator.equals, value: 'pending' },
-    permission: { all: ['resolve', { self: 'userId' }] },
+    permission: { all: ['resolve', { rel: 'user', action: 'resolve' }] },
   },
   to: {
     predicate: { field: 'status', operator: Operator.equals, value: 'approved' },
@@ -70,9 +70,22 @@ describe('validateTransition', () => {
     };
     expect(validateTransition(t).errors).toContainEqual({
       path: 'from.permission',
-      message: 'unrecognized ActionRule shape',
+      message: 'not an action rule',
       code: 'invalid_permission',
     });
+  });
+
+  test('a permission { rule } is positive: a negation is flagged', () => {
+    const t: Transition = {
+      from: {
+        predicate: true,
+        permission: { rule: { field: 'status', operator: Operator.notEquals, value: 'blocked' } },
+      },
+      to: { predicate: true },
+    };
+    const result = validateTransition(t);
+    expect(result.ok).toBe(false);
+    expect(result.errors.every((e) => e.path.startsWith('from.permission'))).toBe(true);
   });
 
   // --- structured issues instead of raw TypeErrors on malformed input ---
