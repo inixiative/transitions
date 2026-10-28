@@ -1,9 +1,11 @@
 # Changelog
 
-## 0.5.1
+## 0.6.0
 
-- **Requires `@inixiative/permissions@^0.6.0`** (and `@inixiative/json-rules@^3.6.0`). The adapter speaks the 0.5+ contract: the actor is handed through whole (`getActor`), so `{ actor }` arms and `actor.<field>` binds read the fields you pass; an actor without an id is nobody acting.
-- **`createAuthorize` takes `selfResource`.** A self arm is `{ self, action }`: it passes when `record[self]` is the actor's id and `action` holds on `selfResource`'s record `{ id }` through the schema. A bare `{ self }` no longer typechecks or validates, and a self arm evaluated without `selfResource` throws (a configuration error, not a deny).
+- **Requires `@inixiative/permissions@^0.12.1`.**
+- **Breaking: `createAuthorize` takes `map`**, permissions' `SchemaMap` (`{ resources, fieldMap, polymorphism? }`): a `{ rel }` walk follows the relation the map names. `resolveRelation` and `selfResource` are gone.
+- **Breaking: the actor is permissions' `{ model, record }`**, read in a `{ rule }` as `__actor` (`__actor.model`, `__actor.record.id`). The `{ self }` and `{ actor }` arms are gone: acting as yourself is a walk to your own entry (`{ rel: 'user', action }` on a row hydrated with its `user`), and a row without the relation loaded is denied.
+- **Breaking: `validateTransition` checks a permission with `validateActionRule`**: every `{ rule }` is a positive json-rules condition, so a negation is an `invalid_permission` issue. An unrecognized shape reads `not an action rule`.
 
 ## 0.5.0
 

@@ -34,7 +34,7 @@ const map: TransitionMap = {
         {
           from: {
             predicate: eq('status', 'pending'),
-            permission: { self: 'sourceUserId', action: 'cancel' },
+            permission: { rel: 'sourceUser', action: 'cancel' },
           },
           to: { predicate: eq('status', 'cancelled') },
         },
@@ -152,10 +152,11 @@ describe('available — from-side only', () => {
   });
 
   test('respects from permission when authorize is injected', () => {
-    const actor = { id: 'u1' };
+    const actor = { model: 'User', record: { id: 'u1' } };
     const auth: Authorize = (rule, record) => {
       if (rule === 'resolve') return false;
-      if (rule && typeof rule === 'object' && 'self' in rule) return record[rule.self] === actor.id;
+      if (rule && typeof rule === 'object' && 'rel' in rule)
+        return record[`${rule.rel}Id`] === actor.record.id;
       return true;
     };
     const actions = available(

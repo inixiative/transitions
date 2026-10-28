@@ -197,7 +197,7 @@ this is the runtime half.
 _Source-checked 2026-06-08 against `@inixiative/json-rules@2.5.0` + `@monorepo/permissions`._
 
 - **Permissions (rebac) is serializable + json-rules-native.** `ActionRule` (Zod, recursive):
-  `string | null | { rel, action } | { self } | { rule } | { any: [] } | { all: [] }`, where the
+  `string | null | { rel, action } | { rule } | { any: [] } | { all: [] }`, where the
   `{ rule }` leaf is a json-rules `Condition` (`check(rule.rule, record)`). So a transition's
   `action.permission` *is* an `ActionRule` — same serializable algebra as the from/to predicates.
   Inject `rebac.check(permix, schema, model, record, action.permission)` as the `authorize`
@@ -299,7 +299,7 @@ json-rules `AggregateRule` / `AGGREGATE_OPERATORS` — exact syntax TBD at build
 ```
 approve = { paths: [{ from: { status: pending, permission: 'resolve' },                to: { status: approved } }] }
 reject  = { paths: [{ from: { status: pending, permission: 'resolve' },                to: { status: rejected  } }] }
-cancel  = { paths: [{ from: { status: pending, permission: { self: 'sourceUserId' } }, to: { status: cancelled } }] }
+cancel  = { paths: [{ from: { status: pending, permission: { rel: 'sourceUser', action: 'cancel' } }, to: { status: cancelled } }] }
 ```
 
 `available(inquiry)` → which of approve/reject/cancel to show (status=pending + actor); the existing

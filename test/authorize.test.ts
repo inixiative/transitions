@@ -1,8 +1,38 @@
 import { describe, expect, test } from 'bun:test';
 import { Operator } from '@inixiative/json-rules';
-import type { RebacSchema } from '@inixiative/permissions';
-import type { Transition } from '../index';
+import type { RebacSchema, SchemaMap } from '@inixiative/permissions';
+import type { Actor, Transition } from '../index';
 import { checkPath, createAuthorize } from '../index';
+
+const mapOf = (relations: Record<string, Record<string, string>>): SchemaMap => {
+  const resources = [
+    ...new Set([...Object.keys(relations), ...Object.values(relations).flatMap(Object.values)]),
+  ];
+  return {
+    resources: Object.fromEntries(resources.map((resource) => [resource, resource])),
+    fieldMap: {
+      models: Object.fromEntries(
+        resources.map((resource) => [
+          resource,
+          {
+            fields: Object.fromEntries(
+              Object.entries(relations[resource] ?? {}).map(([segment, target]) => [
+                segment,
+                {
+                  kind: 'object',
+                  type: target,
+                  isList: false,
+                  fromFields: [`${segment}Id`],
+                  toFields: ['id'],
+                },
+              ]),
+            ),
+          },
+        ]),
+      ),
+    },
+  };
+};
 
 const schema: RebacSchema = {
   permissions: {
@@ -17,17 +47,21 @@ const schema: RebacSchema = {
     },
     membership: {
       actions: {
-        leave: { self: 'userId', action: 'operate' },
+        leave: { rel: 'user', action: 'operate' },
         manage: { rel: 'organization', action: 'manage' },
       },
     },
-    // the actor's own entry: with no role-derived grants in this seam, the schema says what an
-    // actor may do as itself
-    user: { actions: { operate: true } },
+    user: {
+      actions: {
+        operate: { rule: { field: 'id', operator: Operator.equals, path: '__actor.record.id' } },
+      },
+    },
   },
 };
 
-const authorizeFor = createAuthorize<string>({ schema, selfResource: 'user' });
+const map = mapOf({ membership: { organization: 'organization', user: 'user' } });
+const authorizeFor = createAuthorize<string>({ schema, map });
+const asUser = (id: string): Actor => ({ model: 'User', record: { id } });
 
 describe('permissions adapter (createAuthorize)', () => {
   test('abac { rule } leaf', () => {
@@ -42,45 +76,44 @@ describe('permissions adapter (createAuthorize)', () => {
     expect(authorize('read', { role: 'member' }, null)).toBe(false);
   });
 
-  // permissions 0.3.0 added boolean terminals — a bare `true` authorizes, `false` denies.
   test('boolean terminal: `true` authorizes, `false` denies', () => {
     const s: RebacSchema = { permissions: { m: { actions: { go: true, stop: false } } } };
-    const authorize = createAuthorize({ schema: s })('m');
+    const authorize = createAuthorize({ schema: s, map: mapOf({ m: {} }) })('m');
     expect(authorize('go', {}, null)).toBe(true);
     expect(authorize('stop', {}, null)).toBe(false);
-    // inline (not via schema)
     expect(authorize(true, {}, null)).toBe(true);
     expect(authorize(false, {}, null)).toBe(false);
   });
 
-  test('{ self, action } matches the actor id and holds the action on its own entry', () => {
+  test('acting as yourself is a walk to your own entry', () => {
     const authorize = authorizeFor('membership');
-    expect(authorize('leave', { userId: 'u1' }, { id: 'u1' })).toBe(true);
-    expect(authorize('leave', { userId: 'u2' }, { id: 'u1' })).toBe(false);
-    expect(authorize('leave', { userId: 'u1' }, null)).toBe(false);
-    expect(authorize('leave', { userId: 'u1' }, { id: null })).toBe(false);
+    expect(authorize('leave', { userId: 'u1', user: { id: 'u1' } }, asUser('u1'))).toBe(true);
+    expect(authorize('leave', { userId: 'u2', user: { id: 'u2' } }, asUser('u1'))).toBe(false);
+    expect(authorize('leave', { userId: 'u1', user: { id: 'u1' } }, null)).toBe(false);
   });
 
-  test('a self arm without a selfResource is a configuration error, not a deny', () => {
-    const authorize = createAuthorize({ schema })('membership');
-    expect(() => authorize('leave', { userId: 'u1' }, { id: 'u1' })).toThrow(/selfResource/);
+  test('a row without its relation loaded is denied', () => {
+    const authorize = authorizeFor('membership');
+    expect(authorize('leave', { userId: 'u1' }, asUser('u1'))).toBe(false);
   });
 
-  test('{ actor } reads the actor as it was handed in', () => {
+  test('a { rule } reads the actor as __actor', () => {
     const s: RebacSchema = {
       permissions: {
         m: {
-          actions: { go: { actor: { field: 'kind', operator: Operator.equals, value: 'person' } } },
+          actions: {
+            go: { rule: { field: '__actor.model', operator: Operator.equals, value: 'User' } },
+          },
         },
       },
     };
-    const authorize = createAuthorize({ schema: s })('m');
-    expect(authorize('go', {}, { id: 'u1', kind: 'person' })).toBe(true);
-    expect(authorize('go', {}, { id: 't1', kind: 'token' })).toBe(false);
+    const authorize = createAuthorize({ schema: s, map: mapOf({ m: {} }) })('m');
+    expect(authorize('go', {}, asUser('u1'))).toBe(true);
+    expect(authorize('go', {}, { model: 'Token', record: { id: 't1' } })).toBe(false);
     expect(authorize('go', {}, null)).toBe(false);
   });
 
-  test('{ rel, action } walks the relation (default resolver: segment = resource)', () => {
+  test('{ rel, action } walks the relation the map names', () => {
     const authorize = authorizeFor('membership');
     expect(authorize('manage', { organization: { role: 'admin' } }, null)).toBe(true);
     expect(authorize('manage', { organization: { role: 'member' } }, null)).toBe(false);
@@ -106,14 +139,16 @@ describe('permissions adapter (createAuthorize)', () => {
   });
 
   test('superadmin bypass (derived from the actor)', () => {
-    const authorize = createAuthorize({ schema, isSuperadmin: (a) => a?.id === 'root' })(
-      'organization',
-    );
-    expect(authorize(null, { role: 'member' }, { id: 'root' })).toBe(true);
-    expect(authorize(null, { role: 'member' }, { id: 'u1' })).toBe(false);
+    const authorize = createAuthorize({
+      schema,
+      map,
+      isSuperadmin: (actor) => actor?.record.id === 'root',
+    })('organization');
+    expect(authorize(null, { role: 'member' }, asUser('root'))).toBe(true);
+    expect(authorize(null, { role: 'member' }, asUser('u1'))).toBe(false);
   });
 
-  test('resolveRelation maps a relation field → resource name', () => {
+  test('the map says which resource a relation leads to', () => {
     const s: RebacSchema = {
       permissions: {
         space: { actions: { own: { rel: 'org', action: 'own' } } },
@@ -124,22 +159,20 @@ describe('permissions adapter (createAuthorize)', () => {
     };
     const authorize = createAuthorize({
       schema: s,
-      resolveRelation: (_resource, seg) => (seg === 'org' ? 'organization' : seg),
+      map: mapOf({ space: { org: 'organization' } }),
     })('space');
     expect(authorize('own', { org: { role: 'owner' } }, null)).toBe(true);
   });
 
-  // The whole point of dropping the fork: a string-delegation cycle TERMINATES and denies (the fork
-  // hung forever). permissions detects the cycle; the adapter fails closed.
   test('string self-delegation cycle (read: "read") terminates and denies — does not hang', () => {
     const s: RebacSchema = { permissions: { m: { actions: { read: 'read' } } } };
-    const authorize = createAuthorize({ schema: s })('m');
+    const authorize = createAuthorize({ schema: s, map: mapOf({ m: {} }) })('m');
     expect(authorize('read', { id: '1' }, null)).toBe(false);
   });
 
   test('mutual string-delegation cycle (x: "y", y: "x") terminates and denies', () => {
     const s: RebacSchema = { permissions: { m: { actions: { x: 'y', y: 'x' } } } };
-    const authorize = createAuthorize({ schema: s })('m');
+    const authorize = createAuthorize({ schema: s, map: mapOf({ m: {} }) })('m');
     expect(authorize('x', { id: '1' }, null)).toBe(false);
   });
 });
@@ -155,13 +188,13 @@ describe('adapter wired into the transition kernel', () => {
   };
 
   test('authorized when the related org grants manage', () => {
-    const authorize = createAuthorize({ schema })('membership');
+    const authorize = createAuthorize({ schema, map })('membership');
     const record = { role: 'member', organization: { role: 'owner' } };
     expect(checkPath(promote, record, { role: 'admin' }, { authorize })).toBe(true);
   });
 
   test('from permission denied when the related org does not grant manage', () => {
-    const authorize = createAuthorize({ schema })('membership');
+    const authorize = createAuthorize({ schema, map })('membership');
     const record = { role: 'member', organization: { role: 'member' } };
     const result = checkPath(promote, record, { role: 'admin' }, { authorize });
     expect(result).not.toBe(true);

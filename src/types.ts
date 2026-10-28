@@ -1,16 +1,16 @@
 import type { CheckOptions, Condition, Row, ToPrismaOptions } from '@inixiative/json-rules';
-import type { ActionRule } from '@inixiative/permissions';
+import type { ActionRule, Actor as PermissionsActor } from '@inixiative/permissions';
 
 /**
  * The serializable permission algebra — re-exported straight from `@inixiative/permissions`, the
- * single source of truth (string delegation, `{ rel, action }`, `{ self }`, abac `{ rule }`,
+ * single source of truth (string delegation, `{ rel, action }`, abac `{ rule }`,
  * `any`/`all`, boolean terminals `true`/`false`, and `null`). The kernel never interprets it — it
  * hands the rule to an injected {@link Authorize} callback (see {@link createAuthorize}, which
  * bridges permissions' `check`).
  */
 export type { ActionRule, Row };
 
-export type Actor = ({ id?: string | null } & Row) | null | undefined;
+export type Actor = PermissionsActor | null | undefined;
 
 /**
  * Injected permission evaluator. Resource-free: the kernel knows nothing about resources or schemas,
