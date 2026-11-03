@@ -2,6 +2,9 @@
 export * from './src/authorize';
 export * from './src/check';
 export * from './src/describe';
+
+import './src/engineGlobals';
+
 export * from './src/merge';
 export * from './src/registry';
 export * from './src/serializable';

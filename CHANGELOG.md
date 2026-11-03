@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0
+
+- **Requires `@inixiative/json-rules@^3.17.0` and `@inixiative/permissions@^0.19.0`.** One copy of
+  each beside an app on the same versions; the published 0.6.0 still pulled permissions 0.12.
+- **Registers the `transitions` namespace** in json-rules' `engineGlobals`, the one engine
+  interaction point shared with permissions and rules-builder. It holds no setting yet: every
+  option is per call.
+
 ## 0.6.0
 
 - **Requires `@inixiative/permissions@^0.12.1`.**
