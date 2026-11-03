@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.1
+
+- **Requires `@inixiative/json-rules@^3.18.0` and `@inixiative/permissions@^0.20.0`**, so it shares
+  one copy of each with an app on the current versions.
+
 ## 0.7.0
 
 - **Requires `@inixiative/json-rules@^3.17.0` and `@inixiative/permissions@^0.19.0`.** One copy of
