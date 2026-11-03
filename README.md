@@ -1,16 +1,20 @@
 # @inixiative/transitions
 
+> One of the [inixiative](https://www.inixiative.com) building blocks. Stop rediscovering what you need to build. See [all the projects](https://github.com/inixiative).
+
 A small, **stateless** primitive on top of [`@inixiative/json-rules`](https://github.com/inixiative/json-rules)
 that answers two questions about an entity's lifecycle, declaratively:
 
-- **"Can this change happen?"** — guard a proposed update (`checkTransition`).
-- **"What changes can happen?"** — list available actions for a record (`available`), and via
-  `toPrisma`, every record currently eligible for an action (`eligible`).
+- **"Can this change happen?"** `checkTransition` guards a proposed update.
+- **"What changes can happen?"** `available` lists the actions open to one record, and `eligible`
+  compiles the same rules through `toPrisma` into a query for every record an action is open to.
 
 It is **not** a state machine (no statecharts/actors/hierarchy), does **not** own state, and does
 **not** execute the change or run side effects. It is a guard + affordance layer. A transition is
-**pure data** → serializable → tenant-configurable at runtime (stored in the DB, edited in a UI,
-no deploy to change a lifecycle).
+**pure data**, so a tenant's lifecycle can be stored in the database and edited in a UI at runtime,
+with no deploy to change it. Because one rule set answers both the single-record check and the
+set query, the set query never returns a record the check would refuse; where a rule can't compile
+to Prisma, `eligible` throws.
 
 > Full design: [`docs/FEAT-018-transitions.md`](./docs/FEAT-018-transitions.md).
 
@@ -22,16 +26,16 @@ resource → action → Action { paths: Transition[], label? }
                              Side       { predicate, permission?, requires? }
 ```
 
-A `resource` key is map-qualified (`map:Model`, e.g. `db:Inquiry`) — the same convention
+A `resource` key is map-qualified (`map:Model`, e.g. `db:Inquiry`), the same convention
 `@inixiative/permissions` uses, so a transition's `permission` can delegate into the rebac schema.
 
-A `Transition` is one atomic `from → to` edge. An **Action** (a named verb) is the OR of its edges —
+A `Transition` is one atomic `from → to` edge. An **Action** (a named verb) is the OR of its edges:
 disjunction lives at the action level, never inside a `Transition`, so the kernel stays atomic and
 serializable.
 
-The `from`/`to` asymmetry is load-bearing and applies to **both** `predicate` (legality) and
+The `from`/`to` asymmetry matters and applies to **both** `predicate` (legality) and
 `permission` (authz): `from.*` is evaluated against the **current** record, `to.*` against the
-**resulting (merged)** record. Permission only ever lives on a side — every authz check reads a
+**resulting (merged)** record. Permission only ever lives on a side: every authz check reads a
 concrete record, so there is no record-free action-level permission.
 
 ## Check
@@ -60,7 +64,7 @@ checkTransition(rules, 'db:Inquiry', 'approve', { status: 'approved' }, { status
 ```
 
 `checkTransition(rules, resource, action, record, changes, { actor, authorize })` returns **`true`** when
-allowed, else a structured **`Reason`** — never a bare bool:
+allowed, else a structured **`Reason`**, never a bare bool:
 
 ```ts
 type SideReason = { predicate?: string; permission?: string }; // why one side failed
@@ -69,7 +73,7 @@ type Reason = { paths: PathReason[] };                          // one entry per
 ```
 
 Each side reports its `predicate` (legality) and `permission` (authz) failures independently, and
-`from`/`to` are kept separate — so the caller sees the whole picture, not just the first failure. To
+`from`/`to` are kept separate, so the caller sees every failure, not only the first. To
 map to HTTP: a path that fails purely on `permission` is a 403; any `predicate` failure is a 409.
 `describe(reason)` builds a human-readable message.
 
@@ -100,12 +104,12 @@ from.permission   AND   to.permission
 
 Absent = open; `null` (or `false`) = terminal deny. Omit `authorize` to check legality only.
 
-### `createAuthorize` — the `@inixiative/permissions` adapter
+### `createAuthorize`: the `@inixiative/permissions` adapter
 
 Authorization is **not** reimplemented here. `createAuthorize` is a thin adapter that bridges
 `@inixiative/permissions`' production rebac `check` onto the `Authorize` seam:
 `createAuthorize(options)(resource)` returns an `Authorize` bound to a (map-qualified) `resource`.
-permissions owns the whole evaluation — `string` delegation with **cycle detection**, `rel` walks
+permissions owns the whole evaluation: `string` delegation with **cycle detection**, `rel` walks
 through the schema map, cross-map bridge walks, abac `{ rule }` reading the actor as `__actor`,
 boolean terminals, `any`/`all`, and per-row `permissionRules` overrides. Acting as yourself is a
 walk to your own entry (`{ rel: 'user', action }` on a row hydrated with its `user`); a row without
@@ -130,8 +134,8 @@ checkTransition(rules, 'db:Inquiry', 'cancel', record, changes, {
 
 `options`: `schema` (permissions' `{ bridges?, permissions }`), `map` (permissions' `SchemaMap`: which
 model each resource is, its relations and foreign keys), optional `isSuperadmin`, and `data`
-(supplemental hydrated rows for bridge walks). The actor is permissions' `{ model, record }`. A cyclic permission graph —
-which permissions surfaces by throwing — is caught and denied (fail closed), so the guard terminates
+(supplemental hydrated rows for bridge walks). The actor is permissions' `{ model, record }`. A cyclic permission graph
+(permissions throws on one) is caught and denied (fail closed), so the guard terminates
 cleanly.
 
 ## Affordance + set query
@@ -153,8 +157,8 @@ const where = await executePrismaPlan(plan, prisma);
 `executePrismaPlan(plan, prisma)`, which resolves the plan's field and step references, and use
 the `where` it returns.
 
-A predicate evaluates with the same options json-rules' `check()` takes — `now`, `timeZone`,
-`weekStart`, `bindings` — passed beside `actor` / `authorize`. `checkTransition`,
+A predicate evaluates with the same options json-rules' `check()` takes (`now`, `timeZone`,
+`weekStart`, `bindings`), passed beside `actor` / `authorize`. `checkTransition`,
 `checkPath` and `available` give them to both sides; `eligible` resolves the bindings into the
 predicate (and into a `{ bind }` `timeZone`) and compiles with `now`, so the set query selects
 exactly the records the single check accepts:
@@ -168,7 +172,7 @@ eligible(rules, 'incident', 'autoResolve', options);
 // → plan whose where is { AND: [{ status: … }, { lastBreachedAt: { lt: <now - window> } }] }
 ```
 
-A guard can read its window off the record instead — self-contained, nothing to bind:
+A guard can read its window off the record instead, with nothing to bind:
 
 ```ts
 { field: 'lastBreachedAt', dateOperator: 'before',
@@ -176,7 +180,7 @@ A guard can read its window off the record instead — self-contained, nothing t
 ```
 
 `check()` evaluates it per record; `eligible` throws on it, since a Prisma `where` can't do
-arithmetic on a column — it never returns the wrong set.
+arithmetic on a column. It never returns the wrong set.
 
 A guard that compares a column with a column (`{ field: 'approvals', operator: 'lessThan', path:
 'required' }`) or counts a relation needs the schema to compile: pass toPrisma's `map` /
@@ -196,24 +200,24 @@ Without the schema, a column comparison throws.
 `to.merge` produces the resulting record. Keyword strategies are serializable; a callback is full-power
 but not (`isSerializable(transition)` tells you which).
 
-- `spread` (default) — shallow overwrite
-- `deepMerge` — recursive, arrays replaced
-- `{ kind: 'append', path }` — concat at a field path
-- `{ kind: 'appendUnique', path }` — concat + dedupe
+- `spread` (default): shallow overwrite
+- `deepMerge`: recursive, arrays replaced
+- `{ kind: 'append', path }`: concat at a field path
+- `{ kind: 'appendUnique', path }`: concat + dedupe
 
 ## Authoring validation
 
 `validateTransition(t, { lens?, requireSerializable? })` validates predicates (via json-rules
 `validateRule`, plus `validateRuleInLens` when a `lens` scopes referenceable fields), merge
-strategy, and permission shape (via `@inixiative/permissions`' `validateActionRule`: every `{ rule }` positive) — run it on
-save before persisting a tenant config. It returns json-rules' `ValidationResult` —
-`{ ok, errors: { path, message, code }[] }` — and never throws, even on malformed input. json-rules'
+strategy, and permission shape (via `@inixiative/permissions`' `validateActionRule`: every `{ rule }` positive). Run it on
+save before persisting a tenant config. It returns json-rules' `ValidationResult`,
+`{ ok, errors: { path, message, code }[] }`, and never throws, even on malformed input. json-rules'
 issues keep their codes; transitions adds `missing_side`, `missing_predicate`, `invalid_permission`,
 `invalid_requires`, `invalid_merge` and `unserializable_merge`.
 
-## Not built yet (designed — see the plan)
+## Not built yet (designed in the plan)
 
-- **`requires` relation loader** — derive a Prisma `include` from a side's `requires`, auto-load, fail
+- **`requires` relation loader:** derive a Prisma `include` from a side's `requires`, auto-load, fail
   loud on unloaded reads, respect tenancy. The kernel ignores `requires` (it's metadata).
 - **Permission-filtered `available()`** beyond the from-side static check.
 - **Lens-aware structural composition** check (does A's `to` lens line up with B's `from`).
