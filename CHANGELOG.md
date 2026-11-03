@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.2
+
+- **Requires `@inixiative/permissions@^0.21.0`.**
+
 ## 0.7.1
 
 - **Requires `@inixiative/json-rules@^3.18.0` and `@inixiative/permissions@^0.20.0`**, so it shares
