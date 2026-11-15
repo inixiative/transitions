@@ -1,0 +1,49 @@
+{
+  "id": "lifecycle-guards",
+  "title": "Lifecycle guards and affordances",
+  "routing": "Is this about whether a record may change state, or which state changes are open to it (approve/reject/cancel buttons, 'can this inquiry be approved', 'every record ready to auto-resolve')? Signals: checkTransition, checkPath, Reason / PathReason / SideReason, describe, 403 vs 409, available, eligible, executePrismaPlan, an Action { paths, label? }, from/to predicates, map-qualified resource keys like 'db:Inquiry', now / timeZone / weekStart / bindings on a guard; jobs: guard an update, list allowed actions, query every eligible row, turn an imperative precondition into a declarative rule.",
+  "concepts": ["transition-model", "check-transition", "affordance", "scope-non-goals"],
+  "tokens": 12573,
+  "tokenMethod": "chars/4",
+  "files": {
+    "recognise": {
+      "path": "recognise.md",
+      "tokens": 1550,
+      "experimental": true,
+      "note": "a smaller recognise-only document; knowledge.md is the Warden document"
+    },
+    "knowledge": {
+      "path": "knowledge.md",
+      "tokens": 12573
+    }
+  },
+  "runsAgreed": 3,
+  "sources": {
+    "docs": ["README.md", "docs/FEAT-018-transitions.md"],
+    "docUnits": [
+      "doc:README.md#preface",
+      "doc:README.md#model",
+      "doc:docs/FEAT-018-transitions.md#overview",
+      "doc:docs/FEAT-018-transitions.md#shape",
+      "doc:docs/FEAT-018-transitions.md#registry-actions-the-affordance-layer",
+      "doc:docs/FEAT-018-transitions.md#worked-example-validation-transition",
+      "doc:README.md#check",
+      "doc:docs/FEAT-018-transitions.md#kernel-pure-orm-agnostic-tiny",
+      "doc:README.md#affordance-set-query",
+      "doc:README.md#not-built-yet-designed-in-the-plan",
+      "doc:docs/FEAT-018-transitions.md#lens-awareness-composition-scoped",
+      "doc:docs/FEAT-018-transitions.md#relations-requires-designed-not-built-yet",
+      "doc:docs/FEAT-018-transitions.md#scope"
+    ],
+    "catalogClusters": [
+      "primitive-affordance",
+      "primitive-authoring-validation",
+      "primitive-check-transition",
+      "primitive-transition-model"
+    ],
+    "codeEntries": 5,
+    "docMembers": 17
+  },
+  "bypassLines": 13,
+  "glossaryTerms": 27
+}

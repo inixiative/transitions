@@ -30,7 +30,7 @@ The unlock: a transition is **pure data** → serializable → **tenant-configur
 ```ts
 type Side = {
   predicate: Condition;     // json-rules — is this state shape legal?
-  permission?: ActionRule;  // json-rules-native rebac rule; authz w.r.t. THIS side's record. Absent = open.
+  permission?: ActionRule;  // @inixiative/permissions rebac rule; authz w.r.t. THIS side's record. Absent = open.
   requires?: Include;       // Prisma-include-shaped; relations the predicate reads (metadata)
 };
 
@@ -122,7 +122,7 @@ can't pick one.
   affordance hint, `checkTransition()` is authoritative.
 - `checkTransition(rules, model, action, record, changes)` → **first** path whose `from` matches the
   current record AND `to` matches the merged next-state (that path's `merge` applies).
-- `eligible(model, action)` → `toPrisma(Any[...paths.map(p => p.from.predicate)])` — the Prisma
+- `eligible(rules, model, action, options)` → `toPrisma(Any[...paths.map(p => p.from.predicate)])` — the Prisma
   plan whose `where` (after `executePrismaPlan`) is one OR'd filter for bulk "who can take this
   action" (verified: `toPrisma(Any) → { OR: [...] }`).
 

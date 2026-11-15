@@ -1,0 +1,33 @@
+{
+  "id": "transition-authorization",
+  "title": "Transition authorization",
+  "routing": "Is this about who may take a transition action (only the requester may cancel, only admins may move a role away from owner)? Signals: from.permission / to.permission, ActionRule forms (string delegation, { rel, action }, { rule } reading __actor, any/all, true/false/null), the Authorize callback, createAuthorize({ schema, map, isSuperadmin?, data? }), @inixiative/permissions createRebacCheck, RebacSchema / SchemaMap, actor { model, record }, permission cycles; jobs: plug the rebac schema into the guard, put a permission on the right side, check legality only without authz.",
+  "concepts": ["authorize-seam", "permission-placement"],
+  "tokens": 5265,
+  "tokenMethod": "chars/4",
+  "files": {
+    "recognise": {
+      "path": "recognise.md",
+      "tokens": 706,
+      "experimental": true,
+      "note": "a smaller recognise-only document; knowledge.md is the Warden document"
+    },
+    "knowledge": {
+      "path": "knowledge.md",
+      "tokens": 5265
+    }
+  },
+  "runsAgreed": 3,
+  "sources": {
+    "docs": ["README.md", "docs/FEAT-018-transitions.md"],
+    "docUnits": [
+      "doc:README.md#permissions-are-injected-the-seam",
+      "doc:docs/FEAT-018-transitions.md#worked-example-validation-transition"
+    ],
+    "catalogClusters": ["primitive-authorize-seam"],
+    "codeEntries": 1,
+    "docMembers": 5
+  },
+  "bypassLines": 6,
+  "glossaryTerms": 23
+}
