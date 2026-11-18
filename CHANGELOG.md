@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.0
+
+- **Requires `@inixiative/json-rules@^4.2.0`.** Breaking through json-rules 4.0:
+  `validateTransition(t, { lens })` now refuses a predicate path that continues past a to-many
+  relation (`votes.approved` is `not_in_lens`; compare the rows with an `arrayOperator` rule on
+  `votes`). Why: json-rules' lens gate admits only what every rail runs, and `check()` reads such a
+  path off the array's missing property. A map handed to `eligible` is json-rules'
+  `LensFieldMap` (a `@inixiative/field-map` map); json-rules no longer exports `FieldMap`.
+
 ## 0.7.2
 
 - **Requires `@inixiative/permissions@^0.21.0`.**
