@@ -15,18 +15,27 @@ const mapOf = (relations: Record<string, Record<string, string>>): SchemaMap => 
         resources.map((resource) => [
           resource,
           {
-            fields: Object.fromEntries(
-              Object.entries(relations[resource] ?? {}).map(([segment, target]) => [
-                segment,
-                {
-                  kind: 'object',
-                  type: target,
-                  isList: false,
-                  fromFields: [`${segment}Id`],
-                  toFields: ['id'],
-                },
-              ]),
-            ),
+            // Every model has the columns its rules and keys read: an id, a role, and each
+            // relation's foreign key (permissions judges every rule path against the map).
+            fields: {
+              id: { kind: 'scalar', type: 'String', isId: true },
+              role: { kind: 'scalar', type: 'String' },
+              ...Object.fromEntries(
+                Object.entries(relations[resource] ?? {}).flatMap(([segment, target]) => [
+                  [
+                    segment,
+                    {
+                      kind: 'object',
+                      type: target,
+                      isList: false,
+                      fromFields: [`${segment}Id`],
+                      toFields: ['id'],
+                    },
+                  ],
+                  [`${segment}Id`, { kind: 'scalar', type: 'String' }],
+                ]),
+              ),
+            },
           },
         ]),
       ),

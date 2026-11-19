@@ -2,6 +2,8 @@
 
 ## 0.8.0
 
+- **`@inixiative/permissions` ^0.24.0** (was ^0.22): one json-rules (4.2) across the stack. permissions 0.23+ judges every rule path against the schema map, so the adapter test's map now declares the columns its rules and keys read (`id`, `role`, each relation's foreign key).
+
 - **Requires `@inixiative/json-rules@^4.2.0`.** Breaking through json-rules 4.0:
   `validateTransition(t, { lens })` now refuses a predicate path that continues past a to-many
   relation (`votes.approved` is `not_in_lens`; compare the rows with an `arrayOperator` rule on
