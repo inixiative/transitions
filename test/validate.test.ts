@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { Operator } from '@inixiative/json-rules';
+import {
+  createLens,
+  type LensFieldMap,
+  type LensNarrowing,
+  Operator,
+} from '@inixiative/json-rules';
 import type { Transition } from '../index';
 import { validateTransition } from '../index';
 
@@ -141,6 +146,64 @@ describe('validateTransition', () => {
       path: 'from.requires',
       message: '`requires` must be a Prisma-include-shaped object',
       code: 'invalid_requires',
+    });
+  });
+
+  describe('with a lens', () => {
+    const map: LensFieldMap = {
+      models: {
+        Review: {
+          fields: {
+            id: { kind: 'scalar', type: 'String' },
+            status: { kind: 'scalar', type: 'String' },
+            votes: { kind: 'object', type: 'Vote', isList: true },
+          },
+        },
+        Vote: {
+          fields: {
+            id: { kind: 'scalar', type: 'String' },
+            approved: { kind: 'scalar', type: 'Boolean' },
+          },
+        },
+      },
+    };
+    const lens: LensNarrowing = {
+      parent: createLens({ maps: { prisma: map }, mapName: 'prisma', model: 'Review' }),
+      root: { relations: { votes: {} } },
+    };
+    const fromPredicate = (predicate: Transition['from']['predicate']): Transition => ({
+      from: { predicate },
+      to: { predicate: true },
+    });
+
+    test('flags a predicate path past a to-many relation (json-rules 4 lens gate)', () => {
+      const result = validateTransition(
+        fromPredicate({ field: 'votes.approved', operator: Operator.equals, value: true }),
+        { lens },
+      );
+      expect(result).toEqual({
+        ok: false,
+        errors: [
+          {
+            path: 'from.predicate.votes.approved',
+            code: 'not_in_lens',
+            message:
+              "'votes.approved' reads through the to-many relation 'votes'; compare its rows with an arrayOperator rule on 'votes'.",
+          },
+        ],
+      });
+    });
+
+    test('accepts the same comparison under an array rule on the relation', () => {
+      const result = validateTransition(
+        fromPredicate({
+          field: 'votes',
+          arrayOperator: 'any',
+          condition: { field: 'approved', operator: Operator.equals, value: true },
+        }),
+        { lens },
+      );
+      expect(result).toEqual({ ok: true, errors: [] });
     });
   });
 });

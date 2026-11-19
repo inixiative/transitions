@@ -3,7 +3,7 @@ import {
   type Condition,
   createLens,
   executePrismaPlan,
-  type FieldMap,
+  type LensFieldMap,
   Operator,
   type ToPrismaResult,
 } from '@inixiative/json-rules';
@@ -29,7 +29,7 @@ const rulesFor = (predicate: Condition): TransitionMap => ({
   },
 });
 
-const map: FieldMap = {
+const map: LensFieldMap = {
   models: {
     Review: {
       fields: {

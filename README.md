@@ -208,7 +208,8 @@ but not (`isSerializable(transition)` tells you which).
 ## Authoring validation
 
 `validateTransition(t, { lens?, requireSerializable? })` validates predicates (via json-rules
-`validateRule`, plus `validateRuleInLens` when a `lens` scopes referenceable fields), merge
+`validateRule`, plus `validateRuleInLens` when a `lens` scopes referenceable fields; a path past a
+to-many relation is `not_in_lens`, read through an `arrayOperator` rule instead), merge
 strategy, and permission shape (via `@inixiative/permissions`' `validateActionRule`: every `{ rule }` positive). Run it on
 save before persisting a tenant config. It returns json-rules' `ValidationResult`,
 `{ ok, errors: { path, message, code }[] }`, and never throws, even on malformed input. json-rules'
