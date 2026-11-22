@@ -21,7 +21,7 @@ export type PermissionsAuthorizeOptions<R extends string = string, A = Actor> = 
    * The rows each check is given (`map:Model → rows`), derived from the record and the actor: the
    * same shape `Subject.data` takes. It carries the supplied maps' rows (who is acting, as
    * `actor:User`, read by a `{ rule }`) and the far rows of joined bridges. Without it a rule that
-   * reads who is acting fails.
+   * reads who is acting is denied.
    */
   data?: (record: Row, actor: A) => Subject<R>['data'];
 };
@@ -47,6 +47,7 @@ export const createAuthorize = <R extends string = string, A = Actor>(
 
   return (resource: R): Authorize =>
     (rule, record, actor) => {
+      // unchecked: the kernel takes any actor, and the caller passes the type it named here
       const acting = actor as A;
       const permix = actorPermix(acting, options.isSuperadmin);
       const subject: Subject<R> = { resource, record, data: options.data?.(record, acting) };

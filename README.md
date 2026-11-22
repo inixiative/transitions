@@ -120,13 +120,19 @@ the relation loaded is denied. It speaks the same map-qualified
 import type { RebacSchema, SchemaMap } from '@inixiative/permissions';
 import { createAuthorize } from '@inixiative/transitions';
 
+// who is acting, as this app holds it; `map.supplied` declares the `actor` models a rule may read
+type Acting = { model: 'User' | 'Token'; record: { id: string } };
+
 const schema: RebacSchema = { permissions: { 'db:Inquiry': { actions: { /* … */ } } } };
-const authorize = createAuthorize({
+const authorize = createAuthorize<string, Acting>({
   schema,
   map,          // permissions' SchemaMap: { resources, fieldMap, polymorphism?, supplied? }
   isSuperadmin, // optional; derived from the actor
-  // the rows each check is given: who is acting, under the map's supplied models
-  data: (_record, actor) => ({ 'actor:Acting': [{ model: actor.model }], 'actor:User': [actor.record] }),
+  // the rows each check is given: the kind that is acting, and its row under its own model
+  data: (_record, actor) => ({
+    'actor:Acting': [{ model: actor.model }],
+    [`actor:${actor.model}`]: [actor.record],
+  }),
 })('db:Inquiry');
 checkTransition(rules, 'db:Inquiry', 'cancel', record, changes, {
   actor: { model: 'User', record: user },
@@ -138,7 +144,9 @@ checkTransition(rules, 'db:Inquiry', 'cancel', record, changes, {
 model each resource is, its relations and foreign keys, and its supplied maps), optional
 `isSuperadmin`, and `data` (the rows each check is given: the supplied maps' rows and the far rows of
 joined bridges). The actor is the app's own value: this package never reads it, and a rule reads who
-is acting only from the rows `data` gives for it (`actor:User.id`). A cyclic permission graph
+is acting only from the rows `data` gives for it (`actor:User.id`), so with no `data` such a rule is
+denied. `createAuthorize<R, A>` names the actor's type for `isSuperadmin` and `data`; the kernel does
+not check that the `actor` a call passes is one. A cyclic permission graph
 (permissions throws on one) is caught and denied (fail closed), so the guard terminates
 cleanly.
 

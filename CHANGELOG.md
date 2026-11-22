@@ -9,10 +9,11 @@ map's supplied models (`actor:User.id`), and `__actor`, `getActor` and the `Acto
 - **`Actor` is `unknown`**: the app's own value. The kernel hands it to `authorize` untouched.
 - **`createAuthorize`'s `data` gives the rows for who is acting** (`(record, actor) => ({ 'actor:User': [row] })`),
   beside the far rows of joined bridges it already gave. Without it, a rule that reads who is acting
-  fails. `createAuthorize<R, A>` types the actor its `isSuperadmin` and `data` receive.
+  is denied. `createAuthorize<R, A>` types the actor its `isSuperadmin` and `data` receive; the kernel
+  takes any actor, so the caller keeps the two in step.
 - **The permix the adapter builds no longer carries `getActor`.**
-- A `{ rule }` follows permissions 0.27's gate: a field compared with another read needs an `exists`
-  beside it (`ruleFieldEqualsPath`), and a null check stands beside an `exists` on its row's key.
+- A `{ rule }` follows permissions 0.27's gate (see its changelog); a rule the gate refuses makes
+  every check on that schema throw.
 - **Why.** Published 0.8.0 depends on permissions `^0.24.0`, so an app on 0.26 or later carried a
   second copy of the library (Zealot's lockfile held 0.24.0 nested under transitions).
 

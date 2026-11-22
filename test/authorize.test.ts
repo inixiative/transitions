@@ -129,6 +129,17 @@ describe('permissions adapter (createAuthorize)', () => {
     expect(authorize('leave', { userId: 'u1', user: { id: 'u1' } }, null)).toBe(false);
   });
 
+  test('with no `data`, a rule that reads who is acting is denied', () => {
+    const authorize = createAuthorize<string, TestActor>({ schema, map })('membership');
+    expect(authorize('leave', { userId: 'u1', user: { id: 'u1' } }, asUser('u1'))).toBe(false);
+  });
+
+  test('a token does not pass a rule on the acting user', () => {
+    const authorize = authorizeFor('membership');
+    const token: TestActor = { model: 'Token', record: { id: 'u1' } };
+    expect(authorize('leave', { userId: 'u1', user: { id: 'u1' } }, token)).toBe(false);
+  });
+
   test('a row without its relation loaded is denied', () => {
     const authorize = authorizeFor('membership');
     expect(authorize('leave', { userId: 'u1' }, asUser('u1'))).toBe(false);
