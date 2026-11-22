@@ -1,8 +1,35 @@
 import { describe, expect, test } from 'bun:test';
 import { Operator } from '@inixiative/json-rules';
-import type { RebacSchema, SchemaMap } from '@inixiative/permissions';
-import type { Actor, Transition } from '../index';
+import {
+  type RebacSchema,
+  ruleFieldEqualsPath,
+  type SchemaMap,
+  type Subject,
+} from '@inixiative/permissions';
+import type { Transition } from '../index';
 import { checkPath, createAuthorize } from '../index';
+
+// Who is acting, as this test's app holds it; `suppliedRowsOf` turns it into the rows a check reads.
+type TestActor = { model: 'User' | 'Token'; record: { id: string } } | null;
+
+const suppliedRowsOf = (_record: unknown, actor: TestActor): Subject['data'] =>
+  actor
+    ? { 'actor:Acting': [{ model: actor.model }], [`actor:${actor.model}`]: [actor.record] }
+    : {};
+
+const supplied: SchemaMap['supplied'] = {
+  maps: {
+    actor: {
+      models: {
+        Acting: { fields: { model: { kind: 'enum', type: 'ActingKind' } } },
+        User: { fields: { id: { kind: 'scalar', type: 'String', isId: true } } },
+        Token: { fields: { id: { kind: 'scalar', type: 'String', isId: true } } },
+      },
+      enums: { ActingKind: ['User', 'Token'] },
+    },
+  },
+  bridges: [],
+};
 
 const mapOf = (relations: Record<string, Record<string, string>>): SchemaMap => {
   const resources = [
@@ -10,6 +37,7 @@ const mapOf = (relations: Record<string, Record<string, string>>): SchemaMap => 
   ];
   return {
     resources: Object.fromEntries(resources.map((resource) => [resource, resource])),
+    supplied,
     fieldMap: {
       models: Object.fromEntries(
         resources.map((resource) => [
@@ -62,15 +90,15 @@ const schema: RebacSchema = {
     },
     user: {
       actions: {
-        operate: { rule: { field: 'id', operator: Operator.equals, path: '__actor.record.id' } },
+        operate: ruleFieldEqualsPath('id', 'actor:User.id'),
       },
     },
   },
 };
 
 const map = mapOf({ membership: { organization: 'organization', user: 'user' } });
-const authorizeFor = createAuthorize<string>({ schema, map });
-const asUser = (id: string): Actor => ({ model: 'User', record: { id } });
+const authorizeFor = createAuthorize<string, TestActor>({ schema, map, data: suppliedRowsOf });
+const asUser = (id: string): TestActor => ({ model: 'User', record: { id } });
 
 describe('permissions adapter (createAuthorize)', () => {
   test('abac { rule } leaf', () => {
@@ -101,22 +129,37 @@ describe('permissions adapter (createAuthorize)', () => {
     expect(authorize('leave', { userId: 'u1', user: { id: 'u1' } }, null)).toBe(false);
   });
 
+  test('with no `data`, a rule that reads who is acting is denied', () => {
+    const authorize = createAuthorize<string, TestActor>({ schema, map })('membership');
+    expect(authorize('leave', { userId: 'u1', user: { id: 'u1' } }, asUser('u1'))).toBe(false);
+  });
+
+  test('a token does not pass a rule on the acting user', () => {
+    const authorize = authorizeFor('membership');
+    const token: TestActor = { model: 'Token', record: { id: 'u1' } };
+    expect(authorize('leave', { userId: 'u1', user: { id: 'u1' } }, token)).toBe(false);
+  });
+
   test('a row without its relation loaded is denied', () => {
     const authorize = authorizeFor('membership');
     expect(authorize('leave', { userId: 'u1' }, asUser('u1'))).toBe(false);
   });
 
-  test('a { rule } reads the actor as __actor', () => {
+  test('a { rule } reads who is acting from the rows `data` supplies', () => {
     const s: RebacSchema = {
       permissions: {
         m: {
           actions: {
-            go: { rule: { field: '__actor.model', operator: Operator.equals, value: 'User' } },
+            go: { rule: { field: 'actor:Acting.model', operator: Operator.equals, value: 'User' } },
           },
         },
       },
     };
-    const authorize = createAuthorize({ schema: s, map: mapOf({ m: {} }) })('m');
+    const authorize = createAuthorize<string, TestActor>({
+      schema: s,
+      map: mapOf({ m: {} }),
+      data: suppliedRowsOf,
+    })('m');
     expect(authorize('go', {}, asUser('u1'))).toBe(true);
     expect(authorize('go', {}, { model: 'Token', record: { id: 't1' } })).toBe(false);
     expect(authorize('go', {}, null)).toBe(false);
@@ -148,7 +191,7 @@ describe('permissions adapter (createAuthorize)', () => {
   });
 
   test('superadmin bypass (derived from the actor)', () => {
-    const authorize = createAuthorize({
+    const authorize = createAuthorize<string, TestActor>({
       schema,
       map,
       isSuperadmin: (actor) => actor?.record.id === 'root',

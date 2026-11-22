@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.9.0 — the actor is the app's own; permissions 0.27, json-rules 4.6
+
+**Breaking.** `@inixiative/permissions` ^0.27.0 (was ^0.25) and `@inixiative/json-rules` ^4.6.0.
+Permissions 0.26 holds no actor: a rule reads who is acting from rows its check is given, under the
+map's supplied models (`actor:User.id`), and `__actor`, `getActor` and the `Actor` type are gone.
+
+- **`Actor` is `unknown`**: the app's own value. The kernel hands it to `authorize` untouched.
+- **`createAuthorize`'s `data` gives the rows for who is acting** (`(record, actor) => ({ 'actor:User': [row] })`),
+  beside the far rows of joined bridges it already gave. Without it, a rule that reads who is acting
+  is denied. `createAuthorize<R, A>` types the actor its `isSuperadmin` and `data` receive; the kernel
+  takes any actor, so the caller keeps the two in step.
+- **The permix the adapter builds no longer carries `getActor`.**
+- A `{ rule }` follows permissions 0.27's gate (see its changelog); a rule the gate refuses makes
+  every check on that schema throw.
+- **Why.** Published 0.8.0 depends on permissions `^0.24.0`, so an app on 0.26 or later carried a
+  second copy of the library (Zealot's lockfile held 0.24.0 nested under transitions).
+
 ## 0.8.0
 
 - **`@inixiative/permissions` ^0.24.0** (was ^0.22): one json-rules (4.2) across the stack. permissions 0.23+ judges every rule path against the schema map, so the adapter test's map now declares the columns its rules and keys read (`id`, `role`, each relation's foreign key).
