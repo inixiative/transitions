@@ -1,5 +1,5 @@
 import type { CheckOptions, Condition, Row, ToPrismaOptions } from '@inixiative/json-rules';
-import type { ActionRule, Actor as PermissionsActor } from '@inixiative/permissions';
+import type { ActionRule } from '@inixiative/permissions';
 
 /**
  * The serializable permission algebra — re-exported straight from `@inixiative/permissions`, the
@@ -10,7 +10,12 @@ import type { ActionRule, Actor as PermissionsActor } from '@inixiative/permissi
  */
 export type { ActionRule, Row };
 
-export type Actor = PermissionsActor | null | undefined;
+/**
+ * Who is acting, as the app holds it. The kernel never reads it: it hands it to the injected
+ * {@link Authorize}, and {@link createAuthorize}'s `data` turns it into the rows a check is
+ * supplied (`actor:User`), which is the only way `@inixiative/permissions` reads who acts.
+ */
+export type Actor = unknown;
 
 /**
  * Injected permission evaluator. Resource-free: the kernel knows nothing about resources or schemas,

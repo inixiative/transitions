@@ -85,7 +85,7 @@ else every path's `PathReason`.
 
 The kernel never imports an authorization library. Per-side `permission` is a serializable
 `ActionRule` re-exported straight from [`@inixiative/permissions`](https://github.com/inixiative/permissions)
-(`string` delegation, `{ rel, action }`, abac `{ rule }` (the actor reads as `__actor`), `any`/`all`, boolean terminals
+(`string` delegation, `{ rel, action }`, abac `{ rule }` (over the record and the rows the check is supplied, such as `actor:User`), `any`/`all`, boolean terminals
 `true`/`false`, `null`), and you inject an `authorize` callback to evaluate it:
 
 ```ts
@@ -110,7 +110,7 @@ Authorization is **not** reimplemented here. `createAuthorize` is a thin adapter
 `@inixiative/permissions`' production rebac `check` onto the `Authorize` seam:
 `createAuthorize(options)(resource)` returns an `Authorize` bound to a (map-qualified) `resource`.
 permissions owns the whole evaluation: `string` delegation with **cycle detection**, `rel` walks
-through the schema map, cross-map bridge walks, abac `{ rule }` reading the actor as `__actor`,
+through the schema map, cross-map bridge walks, abac `{ rule }` over the record and its supplied rows,
 boolean terminals, `any`/`all`, and per-row `permissionRules` overrides. Acting as yourself is a
 walk to your own entry (`{ rel: 'user', action }` on a row hydrated with its `user`); a row without
 the relation loaded is denied. It speaks the same map-qualified
@@ -123,8 +123,10 @@ import { createAuthorize } from '@inixiative/transitions';
 const schema: RebacSchema = { permissions: { 'db:Inquiry': { actions: { /* … */ } } } };
 const authorize = createAuthorize({
   schema,
-  map,          // permissions' SchemaMap: { resources, fieldMap, polymorphism? }
+  map,          // permissions' SchemaMap: { resources, fieldMap, polymorphism?, supplied? }
   isSuperadmin, // optional; derived from the actor
+  // the rows each check is given: who is acting, under the map's supplied models
+  data: (_record, actor) => ({ 'actor:Acting': [{ model: actor.model }], 'actor:User': [actor.record] }),
 })('db:Inquiry');
 checkTransition(rules, 'db:Inquiry', 'cancel', record, changes, {
   actor: { model: 'User', record: user },
@@ -133,8 +135,10 @@ checkTransition(rules, 'db:Inquiry', 'cancel', record, changes, {
 ```
 
 `options`: `schema` (permissions' `{ bridges?, permissions }`), `map` (permissions' `SchemaMap`: which
-model each resource is, its relations and foreign keys), optional `isSuperadmin`, and `data`
-(supplemental hydrated rows for bridge walks). The actor is permissions' `{ model, record }`. A cyclic permission graph
+model each resource is, its relations and foreign keys, and its supplied maps), optional
+`isSuperadmin`, and `data` (the rows each check is given: the supplied maps' rows and the far rows of
+joined bridges). The actor is the app's own value: this package never reads it, and a rule reads who
+is acting only from the rows `data` gives for it (`actor:User.id`). A cyclic permission graph
 (permissions throws on one) is caught and denied (fail closed), so the guard terminates
 cleanly.
 

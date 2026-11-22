@@ -10,25 +10,25 @@ import type { Actor, Authorize, Row } from './types';
 
 const CYCLE = /Cycle detected/;
 
-export type PermissionsAuthorizeOptions<R extends string = string> = {
+export type PermissionsAuthorizeOptions<R extends string = string, A = Actor> = {
   /** The permissions rebac schema: `{ bridges?, permissions }`. */
   schema: RebacSchema<R>;
   /** Which model each resource is, and its relations: where a `{ rel }` walk leads. */
   map: SchemaMap<R>;
   /** Superadmin bypass, derived from the actor; checked before any rule. */
-  isSuperadmin?: (actor: Actor) => boolean;
+  isSuperadmin?: (actor: A) => boolean;
   /**
-   * Supplemental hydrated rows (`map:model → rows`) for bridge (cross-map) `rel` walks, derived from
-   * the record + actor — the same shape `Subject.data` takes. Only consulted when a walk crosses a
-   * bridge and a downstream action reads the far record's fields.
+   * The rows each check is given (`map:Model → rows`), derived from the record and the actor: the
+   * same shape `Subject.data` takes. It carries the supplied maps' rows (who is acting, as
+   * `actor:User`, read by a `{ rule }`) and the far rows of joined bridges. Without it a rule that
+   * reads who is acting fails.
    */
-  data?: (record: Row, actor: Actor) => Subject<R>['data'];
+  data?: (record: Row, actor: A) => Subject<R>['data'];
 };
 
-const actorPermix = (actor: Actor, isSuperadmin?: (actor: Actor) => boolean): PermixLike => ({
+const actorPermix = <A>(actor: A, isSuperadmin?: (actor: A) => boolean): PermixLike => ({
   check: () => false,
   isSuperadmin: () => isSuperadmin?.(actor) ?? false,
-  getActor: () => actor ?? null,
 });
 
 /**
@@ -37,18 +37,19 @@ const actorPermix = (actor: Actor, isSuperadmin?: (actor: Actor) => boolean): Pe
  * `Authorize` bound to a (map-qualified) `resource`; each call evaluates a per-side `permission`
  * rule against a concrete record + actor. permissions owns the evaluation (string delegation with
  * cycle detection, `rel` walks through the schema map, cross-map bridge walks, abac `{ rule }`
- * reading the actor as `__actor`, boolean terminals, `any`/`all`, per-row `permissionRules`
- * overrides).
+ * over the record and its supplied rows, boolean terminals, `any`/`all`, per-row `permissionRules`
+ * overrides). The actor reaches a rule only as the rows `options.data` gives for it.
  */
-export const createAuthorize = <R extends string = string>(
-  options: PermissionsAuthorizeOptions<R>,
+export const createAuthorize = <R extends string = string, A = Actor>(
+  options: PermissionsAuthorizeOptions<R, A>,
 ): ((resource: R) => Authorize) => {
   const check = createRebacCheck<R>(options.map);
 
   return (resource: R): Authorize =>
     (rule, record, actor) => {
-      const permix = actorPermix(actor, options.isSuperadmin);
-      const subject: Subject<R> = { resource, record, data: options.data?.(record, actor) };
+      const acting = actor as A;
+      const permix = actorPermix(acting, options.isSuperadmin);
+      const subject: Subject<R> = { resource, record, data: options.data?.(record, acting) };
       try {
         return check(permix, options.schema, subject, rule as ActionRule);
       } catch (error) {
