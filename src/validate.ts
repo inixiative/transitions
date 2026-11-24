@@ -14,8 +14,8 @@ import type { ActionRule, Merge, Side, ToSide, Transition } from './types';
 export type { ValidationIssue, ValidationResult };
 
 export type ValidateOptions = {
-  /** Optional field/relation allowlist; passed through to json-rules lens validation per predicate. */
-  lens?: Lens | LensNarrowing;
+  /** The lens each predicate is judged in (a field and relation allowlist); passed through to json-rules lens validation per predicate. */
+  predicateLens?: Lens | LensNarrowing;
   /** Where the transition's permissions are judged: with it, each side's `permission` is checked for everything a permissions check refuses at that resource (a read outside its lens included); without it, its shape alone. */
   permission?: { map: SchemaMap; resource: string };
   /** Reject callback merges (use when the transition must be persistable / tenant-configured). */
@@ -80,7 +80,7 @@ const validateSide = (
     errors.push({ path, message: `\`${path}\` side is required`, code: 'missing_side' });
     return;
   }
-  validatePredicate(side.predicate, errors, `${path}.predicate`, options.lens);
+  validatePredicate(side.predicate, errors, `${path}.predicate`, options.predicateLens);
   validatePermission(side.permission, errors, `${path}.permission`, options.permission);
   if (side.requires !== undefined && (typeof side.requires !== 'object' || side.requires === null))
     errors.push({
@@ -94,7 +94,7 @@ const validateSide = (
 /**
  * Authoring validation for a single transition — run on save before persisting a tenant config.
  * Returns structured issues (never throws) on malformed input: predicate validity delegates to
- * json-rules (`validateRule`, plus `validateRuleInLens` when a `lens` is supplied for
+ * json-rules (`validateRule`, plus `validateRuleInLens` when a `predicateLens` is supplied for
  * field/relation scoping); a permission delegates to `@inixiative/permissions`' `validateActionRule` (its shape, and with
  * `permission: { map, resource }` everything a check refuses there);
  * merge strategy is checked here.

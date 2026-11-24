@@ -1,14 +1,18 @@
 # Changelog
 
-## 0.10.0 — permissions 0.28: one schema map
+## 0.10.0 — permissions 0.29: one schema map, `make…`, `bridgeData`
 
-**Breaking.** `@inixiative/permissions` ^0.28.0 (was ^0.27).
+**Breaking.** `@inixiative/permissions` ^0.29.0 (was ^0.27).
 
 Why: permissions 0.28 folded the rebac schema into the schema map (Aron 2026-11-23: "They should
 all just be part of the schema map") and names a resource `map:Model`.
 
-- `createAuthorize({ map, isSuperadmin?, data? })`: `schema` is gone; the rules are the map's
-  `permissions`. A resource is `map:Model` (`db:Inquiry`).
+- `createAuthorize` is `makeAuthorize({ map, isSuperadmin?, bridgeDataOf? })`: it hands you the
+  function you then call, as every `make…` in permissions does. `schema` is gone (the rules are the
+  map's `permissions`), `data` is `bridgeDataOf` (it gives a check its `bridgeData`), and a resource
+  is `map:Model` (`db:Inquiry`).
+- `validateTransition`'s `lens` is `predicateLens`: it is the lens a predicate is judged in, not
+  the permission lens, and rules-builder already calls it that.
 - `validateTransition(t, { permission: { map, resource } })` checks each side's permission for
   everything a permissions check refuses at that resource, in the one `validateActionRule` call
   permissions 0.28 gives for a rule kept outside the map. Without the option it checks shape, as

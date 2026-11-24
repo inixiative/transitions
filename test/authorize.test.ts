@@ -2,12 +2,12 @@ import { describe, expect, test } from 'bun:test';
 import { Operator } from '@inixiative/json-rules';
 import { ruleFieldEqualsPath, type SchemaMap, type Subject } from '@inixiative/permissions';
 import type { Transition } from '../index';
-import { checkPath, createAuthorize } from '../index';
+import { checkPath, makeAuthorize } from '../index';
 
 // Who is acting, as this test's app holds it; `suppliedRowsOf` turns it into the rows a check reads.
 type TestActor = { model: 'User' | 'Token'; record: { id: string } } | null;
 
-const suppliedRowsOf = (_record: unknown, actor: TestActor): Subject['data'] =>
+const suppliedRowsOf = (_record: unknown, actor: TestActor): Subject['bridgeData'] =>
   actor
     ? { 'actor:Acting': [{ model: actor.model }], [`actor:${actor.model}`]: [actor.record] }
     : {};
@@ -96,10 +96,10 @@ const schema: Rules = {
 };
 
 const map = mapOf({ membership: { organization: 'organization', user: 'user' } }, schema);
-const authorizeFor = createAuthorize<string, TestActor>({ map, data: suppliedRowsOf });
+const authorizeFor = makeAuthorize<string, TestActor>({ map, bridgeDataOf: suppliedRowsOf });
 const asUser = (id: string): TestActor => ({ model: 'User', record: { id } });
 
-describe('permissions adapter (createAuthorize)', () => {
+describe('permissions adapter (makeAuthorize)', () => {
   test('abac { rule } leaf', () => {
     const authorize = authorizeFor('db:organization');
     expect(authorize('own', { role: 'owner' }, null)).toBe(true);
@@ -114,7 +114,7 @@ describe('permissions adapter (createAuthorize)', () => {
 
   test('boolean terminal: `true` authorizes, `false` denies', () => {
     const s: Rules = { permissions: { 'db:m': { actions: { go: true, stop: false } } } };
-    const authorize = createAuthorize({ map: mapOf({ m: {} }, s) })('db:m');
+    const authorize = makeAuthorize({ map: mapOf({ m: {} }, s) })('db:m');
     expect(authorize('go', {}, null)).toBe(true);
     expect(authorize('stop', {}, null)).toBe(false);
     expect(authorize(true, {}, null)).toBe(true);
@@ -128,8 +128,8 @@ describe('permissions adapter (createAuthorize)', () => {
     expect(authorize('leave', { userId: 'u1', user: { id: 'u1' } }, null)).toBe(false);
   });
 
-  test('with no `data`, a rule that reads who is acting is denied', () => {
-    const authorize = createAuthorize<string, TestActor>({ map })('db:membership');
+  test('with no `bridgeDataOf`, a rule that reads who is acting is denied', () => {
+    const authorize = makeAuthorize<string, TestActor>({ map })('db:membership');
     expect(authorize('leave', { userId: 'u1', user: { id: 'u1' } }, asUser('u1'))).toBe(false);
   });
 
@@ -144,7 +144,7 @@ describe('permissions adapter (createAuthorize)', () => {
     expect(authorize('leave', { userId: 'u1' }, asUser('u1'))).toBe(false);
   });
 
-  test('a { rule } reads who is acting from the rows `data` supplies', () => {
+  test('a { rule } reads who is acting from the rows `bridgeDataOf` supplies', () => {
     const s: Rules = {
       permissions: {
         'db:m': {
@@ -154,9 +154,9 @@ describe('permissions adapter (createAuthorize)', () => {
         },
       },
     };
-    const authorize = createAuthorize<string, TestActor>({
+    const authorize = makeAuthorize<string, TestActor>({
       map: mapOf({ m: {} }, s),
-      data: suppliedRowsOf,
+      bridgeDataOf: suppliedRowsOf,
     })('db:m');
     expect(authorize('go', {}, asUser('u1'))).toBe(true);
     expect(authorize('go', {}, { model: 'Token', record: { id: 't1' } })).toBe(false);
@@ -189,7 +189,7 @@ describe('permissions adapter (createAuthorize)', () => {
   });
 
   test('superadmin bypass (derived from the actor)', () => {
-    const authorize = createAuthorize<string, TestActor>({
+    const authorize = makeAuthorize<string, TestActor>({
       map,
       isSuperadmin: (actor) => actor?.record.id === 'root',
     })('db:organization');
@@ -206,7 +206,7 @@ describe('permissions adapter (createAuthorize)', () => {
         },
       },
     };
-    const authorize = createAuthorize({
+    const authorize = makeAuthorize({
       map: mapOf({ space: { org: 'organization' } }, s),
     })('db:space');
     expect(authorize('own', { org: { role: 'owner' } }, null)).toBe(true);
@@ -214,13 +214,13 @@ describe('permissions adapter (createAuthorize)', () => {
 
   test('string self-delegation cycle (read: "read") terminates and denies — does not hang', () => {
     const s: Rules = { permissions: { 'db:m': { actions: { read: 'read' } } } };
-    const authorize = createAuthorize({ map: mapOf({ m: {} }, s) })('db:m');
+    const authorize = makeAuthorize({ map: mapOf({ m: {} }, s) })('db:m');
     expect(authorize('read', { id: '1' }, null)).toBe(false);
   });
 
   test('mutual string-delegation cycle (x: "y", y: "x") terminates and denies', () => {
     const s: Rules = { permissions: { 'db:m': { actions: { x: 'y', y: 'x' } } } };
-    const authorize = createAuthorize({ map: mapOf({ m: {} }, s) })('db:m');
+    const authorize = makeAuthorize({ map: mapOf({ m: {} }, s) })('db:m');
     expect(authorize('x', { id: '1' }, null)).toBe(false);
   });
 });
@@ -236,13 +236,13 @@ describe('adapter wired into the transition kernel', () => {
   };
 
   test('authorized when the related org grants manage', () => {
-    const authorize = createAuthorize({ map })('db:membership');
+    const authorize = makeAuthorize({ map })('db:membership');
     const record = { role: 'member', organization: { role: 'owner' } };
     expect(checkPath(promote, record, { role: 'admin' }, { authorize })).toBe(true);
   });
 
   test('from permission denied when the related org does not grant manage', () => {
-    const authorize = createAuthorize({ map })('db:membership');
+    const authorize = makeAuthorize({ map })('db:membership');
     const record = { role: 'member', organization: { role: 'member' } };
     const result = checkPath(promote, record, { role: 'admin' }, { authorize });
     expect(result).not.toBe(true);

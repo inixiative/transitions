@@ -203,7 +203,7 @@ describe('validateTransition', () => {
     test('flags a predicate path past a to-many relation (json-rules 4 lens gate)', () => {
       const result = validateTransition(
         fromPredicate({ field: 'votes.approved', operator: Operator.equals, value: true }),
-        { lens },
+        { predicateLens: lens },
       );
       expect(result).toEqual({
         ok: false,
@@ -225,7 +225,7 @@ describe('validateTransition', () => {
           arrayOperator: 'any',
           condition: { field: 'approved', operator: Operator.equals, value: true },
         }),
-        { lens },
+        { predicateLens: lens },
       );
       expect(result).toEqual({ ok: true, errors: [] });
     });
