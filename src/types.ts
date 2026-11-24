@@ -5,21 +5,21 @@ import type { ActionRule } from '@inixiative/permissions';
  * The serializable permission algebra — re-exported straight from `@inixiative/permissions`, the
  * single source of truth (string delegation, `{ rel, action }`, abac `{ rule }`,
  * `any`/`all`, boolean terminals `true`/`false`, and `null`). The kernel never interprets it — it
- * hands the rule to an injected {@link Authorize} callback (see {@link createAuthorize}, which
+ * hands the rule to an injected {@link Authorize} callback (see {@link makeAuthorize}, which
  * bridges permissions' `check`).
  */
 export type { ActionRule, Row };
 
 /**
  * Who is acting, as the app holds it. The kernel never reads it: it hands it to the injected
- * {@link Authorize}, and {@link createAuthorize}'s `data` turns it into the rows a check is
+ * {@link Authorize}, and {@link makeAuthorize}'s `bridgeDataOf` turns it into the rows a check is
  * supplied (`actor:User`), which is the only way `@inixiative/permissions` reads who acts.
  */
 export type Actor = unknown;
 
 /**
  * Injected permission evaluator. Resource-free: the kernel knows nothing about resources or schemas,
- * so the consumer closes over whatever its rebac needs (see {@link createAuthorize}, the adapter
+ * so the consumer closes over whatever its rebac needs (see {@link makeAuthorize}, the adapter
  * over `@inixiative/permissions`).
  */
 export type Authorize = (rule: ActionRule, record: Row, actor: Actor) => boolean;

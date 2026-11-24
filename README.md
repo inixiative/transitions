@@ -89,9 +89,9 @@ The kernel never imports an authorization library. Per-side `permission` is a se
 `true`/`false`, `null`), and you inject an `authorize` callback to evaluate it:
 
 ```ts
-import { checkTransition, createAuthorize } from '@inixiative/transitions';
+import { checkTransition, makeAuthorize } from '@inixiative/transitions';
 
-const authorize = createAuthorize({ schema: rebacSchema, map: schemaMap })('db:Inquiry');
+const authorize = makeAuthorize({ schemaMap })('db:Inquiry');
 checkTransition(rules, 'db:Inquiry', 'approve', record, changes, { actor, authorize });
 ```
 
@@ -104,11 +104,11 @@ from.permission   AND   to.permission
 
 Absent = open; `null` (or `false`) = terminal deny. Omit `authorize` to check legality only.
 
-### `createAuthorize`: the `@inixiative/permissions` adapter
+### `makeAuthorize`: the `@inixiative/permissions` adapter
 
-Authorization is **not** reimplemented here. `createAuthorize` is a thin adapter that bridges
+Authorization is **not** reimplemented here. `makeAuthorize` is a thin adapter that bridges
 `@inixiative/permissions`' production rebac `check` onto the `Authorize` seam:
-`createAuthorize(options)(resource)` returns an `Authorize` bound to a (map-qualified) `resource`.
+`makeAuthorize(options)(resource)` returns an `Authorize` bound to a (map-qualified) `resource`.
 permissions owns the whole evaluation: `string` delegation with **cycle detection**, `rel` walks
 through the schema map, cross-map bridge walks, abac `{ rule }` over the record and its supplied rows,
 boolean terminals, `any`/`all`, and per-row `permissionRules` overrides. Acting as yourself is a
@@ -117,19 +117,17 @@ the relation loaded is denied. It speaks the same map-qualified
 `resource` keys as this package.
 
 ```ts
-import type { RebacSchema, SchemaMap } from '@inixiative/permissions';
-import { createAuthorize } from '@inixiative/transitions';
+import type { SchemaMap } from '@inixiative/permissions';
+import { makeAuthorize } from '@inixiative/transitions';
 
-// who is acting, as this app holds it; `map.supplied` declares the `actor` models a rule may read
+// who is acting, as this app holds it; the schema map's supplied bridges say which `actor` models a rule may read
 type Acting = { model: 'User' | 'Token'; record: { id: string } };
 
-const schema: RebacSchema = { permissions: { 'db:Inquiry': { actions: { /* … */ } } } };
-const authorize = createAuthorize<string, Acting>({
-  schema,
-  map,          // permissions' SchemaMap: { resources, fieldMap, polymorphism?, supplied? }
+const authorize = makeAuthorize<string, Acting>({
+  schemaMap,    // permissions' SchemaMap: { fieldMaps, polymorphismRegistries?, bridges?, permissions }
   isSuperadmin, // optional; derived from the actor
   // the rows each check is given: the kind that is acting, and its row under its own model
-  data: (_record, actor) => ({
+  bridgeDataOf: (_record, actor) => ({
     'actor:Acting': [{ model: actor.model }],
     [`actor:${actor.model}`]: [actor.record],
   }),
@@ -140,12 +138,12 @@ checkTransition(rules, 'db:Inquiry', 'cancel', record, changes, {
 });
 ```
 
-`options`: `schema` (permissions' `{ bridges?, permissions }`), `map` (permissions' `SchemaMap`: which
-model each resource is, its relations and foreign keys, and its supplied maps), optional
-`isSuperadmin`, and `data` (the rows each check is given: the supplied maps' rows and the far rows of
+`options`: `schemaMap` (permissions' `SchemaMap`, the one object its check takes: the field maps,
+the bridges and the rules a `permission` delegates into), optional
+`isSuperadmin`, and `bridgeDataOf` (the rows each check is given: the supplied maps' rows and the far rows of
 joined bridges). The actor is the app's own value: this package never reads it, and a rule reads who
-is acting only from the rows `data` gives for it (`actor:User.id`), so with no `data` such a rule is
-denied. `createAuthorize<R, A>` names the actor's type for `isSuperadmin` and `data`; the kernel does
+is acting only from the rows `bridgeDataOf` gives for it (`actor:User.id`), so with no `bridgeDataOf` such a rule is
+denied. `makeAuthorize<R, A>` names the actor's type for `isSuperadmin` and `bridgeDataOf`; the kernel does
 not check that the `actor` a call passes is one. A cyclic permission graph
 (permissions throws on one) is caught and denied (fail closed), so the guard terminates
 cleanly.
@@ -219,10 +217,12 @@ but not (`isSerializable(transition)` tells you which).
 
 ## Authoring validation
 
-`validateTransition(t, { lens?, requireSerializable? })` validates predicates (via json-rules
-`validateRule`, plus `validateRuleInLens` when a `lens` scopes referenceable fields; a path past a
+`validateTransition(t, { predicateLens?, permission?, requireSerializable? })` validates predicates (via json-rules
+`validateRule`, plus `validateRuleInLens` when a `predicateLens` scopes referenceable fields; a path past a
 to-many relation is `not_in_lens`, read through an `arrayOperator` rule instead), merge
-strategy, and permission shape (via `@inixiative/permissions`' `validateActionRule`: every `{ rule }` positive). Run it on
+strategy, and each side's permission (via `@inixiative/permissions`' `validateActionRule`: every
+`{ rule }` positive; with `permission: { schemaMap, resource }`, also everything a check refuses at that
+resource, a read outside its lens included). Run it on
 save before persisting a tenant config. It returns json-rules' `ValidationResult`,
 `{ ok, errors: { path, message, code }[] }`, and never throws, even on malformed input. json-rules'
 issues keep their codes; transitions adds `missing_side`, `missing_predicate`, `invalid_permission`,
