@@ -17,7 +17,7 @@ export type ValidateOptions = {
   /** The lens each predicate is judged in (a field and relation allowlist); passed through to json-rules lens validation per predicate. */
   predicateLens?: Lens | LensNarrowing;
   /** Where the transition's permissions are judged: with it, each side's `permission` is checked for everything a permissions check refuses at that resource (a read outside its lens included); without it, its shape alone. */
-  permission?: { map: SchemaMap; resource: string };
+  permission?: { schemaMap: SchemaMap; resource: string };
   /** Reject callback merges (use when the transition must be persistable / tenant-configured). */
   requireSerializable?: boolean;
 };
@@ -96,7 +96,7 @@ const validateSide = (
  * Returns structured issues (never throws) on malformed input: predicate validity delegates to
  * json-rules (`validateRule`, plus `validateRuleInLens` when a `predicateLens` is supplied for
  * field/relation scoping); a permission delegates to `@inixiative/permissions`' `validateActionRule` (its shape, and with
- * `permission: { map, resource }` everything a check refuses there);
+ * `permission: { schemaMap, resource }` everything a check refuses there);
  * merge strategy is checked here.
  */
 export const validateTransition = (

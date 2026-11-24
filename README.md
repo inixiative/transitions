@@ -91,7 +91,7 @@ The kernel never imports an authorization library. Per-side `permission` is a se
 ```ts
 import { checkTransition, makeAuthorize } from '@inixiative/transitions';
 
-const authorize = makeAuthorize({ map: schemaMap })('db:Inquiry');
+const authorize = makeAuthorize({ schemaMap })('db:Inquiry');
 checkTransition(rules, 'db:Inquiry', 'approve', record, changes, { actor, authorize });
 ```
 
@@ -120,11 +120,11 @@ the relation loaded is denied. It speaks the same map-qualified
 import type { SchemaMap } from '@inixiative/permissions';
 import { makeAuthorize } from '@inixiative/transitions';
 
-// who is acting, as this app holds it; `map.supplied` declares the `actor` models a rule may read
+// who is acting, as this app holds it; the schema map's supplied bridges say which `actor` models a rule may read
 type Acting = { model: 'User' | 'Token'; record: { id: string } };
 
 const authorize = makeAuthorize<string, Acting>({
-  map,          // permissions' SchemaMap: { maps, supplied?, bridges?, polymorphism?, permissions }
+  schemaMap,    // permissions' SchemaMap: { fieldMaps, polymorphismRegistries?, bridges?, permissions }
   isSuperadmin, // optional; derived from the actor
   // the rows each check is given: the kind that is acting, and its row under its own model
   bridgeDataOf: (_record, actor) => ({
@@ -138,8 +138,8 @@ checkTransition(rules, 'db:Inquiry', 'cancel', record, changes, {
 });
 ```
 
-`options`: `map` (permissions' `SchemaMap`, the one object its check takes: the field maps, the
-supplied maps, the bridges and the rules a `permission` delegates into), optional
+`options`: `schemaMap` (permissions' `SchemaMap`, the one object its check takes: the field maps,
+the bridges and the rules a `permission` delegates into), optional
 `isSuperadmin`, and `bridgeDataOf` (the rows each check is given: the supplied maps' rows and the far rows of
 joined bridges). The actor is the app's own value: this package never reads it, and a rule reads who
 is acting only from the rows `bridgeDataOf` gives for it (`actor:User.id`), so with no `bridgeDataOf` such a rule is
@@ -221,7 +221,7 @@ but not (`isSerializable(transition)` tells you which).
 `validateRule`, plus `validateRuleInLens` when a `predicateLens` scopes referenceable fields; a path past a
 to-many relation is `not_in_lens`, read through an `arrayOperator` rule instead), merge
 strategy, and each side's permission (via `@inixiative/permissions`' `validateActionRule`: every
-`{ rule }` positive; with `permission: { map, resource }`, also everything a check refuses at that
+`{ rule }` positive; with `permission: { schemaMap, resource }`, also everything a check refuses at that
 resource, a read outside its lens included). Run it on
 save before persisting a tenant config. It returns json-rules' `ValidationResult`,
 `{ ok, errors: { path, message, code }[] }`, and never throws, even on malformed input. json-rules'

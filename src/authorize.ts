@@ -10,8 +10,8 @@ import type { Actor, Authorize, Row } from './types';
 const CYCLE = /Cycle detected/;
 
 export type PermissionsAuthorizeOptions<R extends string = string, A = Actor> = {
-  /** permissions' schema map, the one `makeRebacCheck` takes: the field maps, the supplied maps, the bridges and the rules a `permission` delegates into. */
-  map: SchemaMap<R>;
+  /** permissions' schema map, the one `makeRebacCheck` takes: the field maps, the bridges (a supplied bridge makes its far model one whose row each check is given) and the rules a `permission` delegates into. */
+  schemaMap: SchemaMap<R>;
   /** Superadmin bypass, derived from the actor; checked before any rule. */
   isSuperadmin?: (actor: A) => boolean;
   /**
@@ -40,7 +40,7 @@ const actorPermix = <A>(actor: A, isSuperadmin?: (actor: A) => boolean): PermixL
 export const makeAuthorize = <R extends string = string, A = Actor>(
   options: PermissionsAuthorizeOptions<R, A>,
 ): ((resource: R) => Authorize) => {
-  const check = makeRebacCheck<R>(options.map);
+  const check = makeRebacCheck<R>(options.schemaMap);
 
   return (resource: R): Authorize =>
     (rule, record, actor) => {

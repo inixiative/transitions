@@ -82,8 +82,8 @@ describe('validateTransition', () => {
   });
 
   test('with where it is judged, a permission that reads outside its lens is flagged', () => {
-    const map: SchemaMap = {
-      maps: {
+    const schemaMap: SchemaMap = {
+      fieldMaps: {
         db: { models: { Doc: { fields: { status: { kind: 'scalar', type: 'String' } } } } },
       },
       permissions: {},
@@ -95,7 +95,7 @@ describe('validateTransition', () => {
       },
       to: { predicate: true },
     });
-    const permission = { map, resource: 'db:Doc' };
+    const permission = { schemaMap, resource: 'db:Doc' };
     expect(validateTransition(reading('status'), { permission }).ok).toBe(true);
     expect(validateTransition(reading('noSuchColumn')).ok).toBe(true);
     const result = validateTransition(reading('noSuchColumn'), { permission });
