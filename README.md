@@ -91,7 +91,7 @@ The kernel never imports an authorization library. Per-side `permission` is a se
 ```ts
 import { checkTransition, createAuthorize } from '@inixiative/transitions';
 
-const authorize = createAuthorize({ schema: rebacSchema, map: schemaMap })('db:Inquiry');
+const authorize = createAuthorize({ map: schemaMap })('db:Inquiry');
 checkTransition(rules, 'db:Inquiry', 'approve', record, changes, { actor, authorize });
 ```
 
