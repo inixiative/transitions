@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.10.0 — permissions 0.28: one schema map
+
+**Breaking.** `@inixiative/permissions` ^0.28.0 (was ^0.27).
+
+Why: permissions 0.28 folded the rebac schema into the schema map (Aron 2026-11-23: "They should
+all just be part of the schema map") and names a resource `map:Model`.
+
+- `createAuthorize({ map, isSuperadmin?, data? })`: `schema` is gone; the rules are the map's
+  `permissions`. A resource is `map:Model` (`db:Inquiry`).
+- `validateTransition(t, { permission: { map, resource } })` checks each side's permission for
+  everything a permissions check refuses at that resource, in the one `validateActionRule` call
+  permissions 0.28 gives for a rule kept outside the map. Without the option it checks shape, as
+  before.
+
 ## 0.9.0 — the actor is the app's own; permissions 0.27, json-rules 4.6
 
 **Breaking.** `@inixiative/permissions` ^0.27.0 (was ^0.25) and `@inixiative/json-rules` ^4.6.0.

@@ -5,6 +5,7 @@ import {
   type LensNarrowing,
   Operator,
 } from '@inixiative/json-rules';
+import type { SchemaMap } from '@inixiative/permissions';
 import type { Transition } from '../index';
 import { validateTransition } from '../index';
 
@@ -78,6 +79,29 @@ describe('validateTransition', () => {
       message: 'not an action rule',
       code: 'invalid_permission',
     });
+  });
+
+  test('with where it is judged, a permission that reads outside its lens is flagged', () => {
+    const map: SchemaMap = {
+      maps: {
+        db: { models: { Doc: { fields: { status: { kind: 'scalar', type: 'String' } } } } },
+      },
+      permissions: {},
+    };
+    const reading = (field: string): Transition => ({
+      from: {
+        predicate: true,
+        permission: { rule: { field, operator: Operator.equals, value: 'open' } },
+      },
+      to: { predicate: true },
+    });
+    const permission = { map, resource: 'db:Doc' };
+    expect(validateTransition(reading('status'), { permission }).ok).toBe(true);
+    expect(validateTransition(reading('noSuchColumn')).ok).toBe(true);
+    const result = validateTransition(reading('noSuchColumn'), { permission });
+    expect(result.ok).toBe(false);
+    expect(result.errors.every((e) => e.path.startsWith('from.permission'))).toBe(true);
+    expect(result.errors.every((e) => e.code === 'invalid_permission')).toBe(true);
   });
 
   test('a permission { rule } is positive: a negation is flagged', () => {

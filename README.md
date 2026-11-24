@@ -117,16 +117,14 @@ the relation loaded is denied. It speaks the same map-qualified
 `resource` keys as this package.
 
 ```ts
-import type { RebacSchema, SchemaMap } from '@inixiative/permissions';
+import type { SchemaMap } from '@inixiative/permissions';
 import { createAuthorize } from '@inixiative/transitions';
 
 // who is acting, as this app holds it; `map.supplied` declares the `actor` models a rule may read
 type Acting = { model: 'User' | 'Token'; record: { id: string } };
 
-const schema: RebacSchema = { permissions: { 'db:Inquiry': { actions: { /* … */ } } } };
 const authorize = createAuthorize<string, Acting>({
-  schema,
-  map,          // permissions' SchemaMap: { resources, fieldMap, polymorphism?, supplied? }
+  map,          // permissions' SchemaMap: { maps, supplied?, bridges?, polymorphism?, permissions }
   isSuperadmin, // optional; derived from the actor
   // the rows each check is given: the kind that is acting, and its row under its own model
   data: (_record, actor) => ({
@@ -140,8 +138,8 @@ checkTransition(rules, 'db:Inquiry', 'cancel', record, changes, {
 });
 ```
 
-`options`: `schema` (permissions' `{ bridges?, permissions }`), `map` (permissions' `SchemaMap`: which
-model each resource is, its relations and foreign keys, and its supplied maps), optional
+`options`: `map` (permissions' `SchemaMap`, the one object its check takes: the field maps, the
+supplied maps, the bridges and the rules a `permission` delegates into), optional
 `isSuperadmin`, and `data` (the rows each check is given: the supplied maps' rows and the far rows of
 joined bridges). The actor is the app's own value: this package never reads it, and a rule reads who
 is acting only from the rows `data` gives for it (`actor:User.id`), so with no `data` such a rule is
@@ -219,10 +217,12 @@ but not (`isSerializable(transition)` tells you which).
 
 ## Authoring validation
 
-`validateTransition(t, { lens?, requireSerializable? })` validates predicates (via json-rules
+`validateTransition(t, { lens?, permission?, requireSerializable? })` validates predicates (via json-rules
 `validateRule`, plus `validateRuleInLens` when a `lens` scopes referenceable fields; a path past a
 to-many relation is `not_in_lens`, read through an `arrayOperator` rule instead), merge
-strategy, and permission shape (via `@inixiative/permissions`' `validateActionRule`: every `{ rule }` positive). Run it on
+strategy, and each side's permission (via `@inixiative/permissions`' `validateActionRule`: every
+`{ rule }` positive; with `permission: { map, resource }`, also everything a check refuses at that
+resource, a read outside its lens included). Run it on
 save before persisting a tenant config. It returns json-rules' `ValidationResult`,
 `{ ok, errors: { path, message, code }[] }`, and never throws, even on malformed input. json-rules'
 issues keep their codes; transitions adds `missing_side`, `missing_predicate`, `invalid_permission`,

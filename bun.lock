@@ -6,7 +6,7 @@
       "name": "@inixiative/transitions",
       "dependencies": {
         "@inixiative/json-rules": "^4.6.0",
-        "@inixiative/permissions": "^0.27.0",
+        "@inixiative/permissions": "^0.28.0",
         "lodash-es": "^4.18.1",
         "zod": "^4.4.3",
       },
@@ -104,7 +104,7 @@
 
     "@inixiative/json-rules": ["@inixiative/json-rules@4.6.0", "", { "dependencies": { "@inixiative/field-map": "^0.1.2", "dayjs": "^1.11.13", "fastest-levenshtein": "^1.0.16", "re2js": "^2.8.6" }, "peerDependencies": { "@prisma/client": ">=6.0.0", "typescript": ">=6.0.0" }, "optionalPeers": ["@prisma/client", "typescript"] }, "sha512-NXTlAkUMoMJ/R+NtO4d9XWwky2Uuv+b+o4WrM/vyjsDcwWSvhUb1ADt5H4BREDp+QqDQDGZqt1ipynDO65kY+A=="],
 
-    "@inixiative/permissions": ["@inixiative/permissions@0.27.0", "", { "dependencies": { "@inixiative/field-map": "^0.1.2", "@inixiative/json-rules": "^4.6.0", "lodash-es": "^4.17.21" }, "peerDependencies": { "typescript": ">=6.0.0" }, "optionalPeers": ["typescript"] }, "sha512-JcgoApfwmi1PXvQica0vwgTzmcj6Mb+HoMqea31G+zEa780HYu2AtJxsp0k52AbpTdNNTb6LVWLsGftdV6tcMA=="],
+    "@inixiative/permissions": ["@inixiative/permissions@0.28.0", "", { "dependencies": { "@inixiative/field-map": "^0.1.2", "@inixiative/json-rules": "^4.6.0", "lodash-es": "^4.17.21" }, "peerDependencies": { "typescript": ">=6.0.0" }, "optionalPeers": ["typescript"] }, "sha512-AR+88ha6TaE0hE3PljKUlrOG7suHP6gGUEgvzu3/cuolcJi7tIV0mUMGK3NFTn0OH33TzveGxOOkHlPsYCdteA=="],
 
     "@jridgewell/gen-mapping": ["@jridgewell/gen-mapping@0.3.13", "", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.5.0", "@jridgewell/trace-mapping": "^0.3.24" } }, "sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA=="],
 

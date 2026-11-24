@@ -2,7 +2,6 @@ import {
   type ActionRule,
   createRebacCheck,
   type PermixLike,
-  type RebacSchema,
   type SchemaMap,
   type Subject,
 } from '@inixiative/permissions';
@@ -11,9 +10,7 @@ import type { Actor, Authorize, Row } from './types';
 const CYCLE = /Cycle detected/;
 
 export type PermissionsAuthorizeOptions<R extends string = string, A = Actor> = {
-  /** The permissions rebac schema: `{ bridges?, permissions }`. */
-  schema: RebacSchema<R>;
-  /** Which model each resource is, and its relations: where a `{ rel }` walk leads. */
+  /** permissions' schema map, the one `createRebacCheck` takes: the field maps, the supplied maps, the bridges and the rules a `permission` delegates into. */
   map: SchemaMap<R>;
   /** Superadmin bypass, derived from the actor; checked before any rule. */
   isSuperadmin?: (actor: A) => boolean;
@@ -52,7 +49,7 @@ export const createAuthorize = <R extends string = string, A = Actor>(
       const permix = actorPermix(acting, options.isSuperadmin);
       const subject: Subject<R> = { resource, record, data: options.data?.(record, acting) };
       try {
-        return check(permix, options.schema, subject, rule as ActionRule);
+        return check(permix, subject, rule as ActionRule);
       } catch (error) {
         if (error instanceof Error && CYCLE.test(error.message)) return false;
         throw error;
